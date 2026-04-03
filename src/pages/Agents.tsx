@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Bot, Plus } from 'lucide-react';
+import { Bot, Plus, Play, TestTube } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 export default function Agents() {
@@ -11,7 +11,8 @@ export default function Agents() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.from('agents').select('*').order('created_at', { ascending: false }).then(({ data }) => {
+    supabase.from('agents').select('*').order('created_at', { ascending: false }).then(({ data, error }) => {
+      if (error) console.error(error);
       setAgents(data ?? []);
       setLoading(false);
     });
@@ -56,19 +57,24 @@ export default function Agents() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {agents.map((agent) => (
-            <Link key={agent.id} to={`/agents/${agent.id}`}>
-              <Card className="hover:border-primary/50 transition-colors cursor-pointer">
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="text-base">{agent.name}</CardTitle>
-                  <Badge variant="secondary" className={statusColors[agent.status] || ''}>
-                    {agent.status}
-                  </Badge>
-                </CardHeader>
-                <CardContent>
-                  <Badge variant="outline">{typeLabels[agent.type] || agent.type}</Badge>
-                </CardContent>
-              </Card>
-            </Link>
+            <Card key={agent.id} className="hover:border-primary/50 transition-colors">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-base">{agent.name}</CardTitle>
+                <Badge variant="secondary" className={statusColors[agent.status] || ''}>
+                  {agent.status}
+                </Badge>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Badge variant="outline">{typeLabels[agent.type] || agent.type}</Badge>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to={`/agents/${agent.id}/simulator`}>
+                      <TestTube className="mr-1 h-3 w-3" />Simulador
+                    </Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
