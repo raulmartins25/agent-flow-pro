@@ -18,6 +18,7 @@ import BlastDetailPage from "@/pages/BlastDetailPage";
 import SimulatorPage from "@/pages/SimulatorPage";
 import PublicSimulatorPage from "@/pages/PublicSimulatorPage";
 import SettingsPage from "@/pages/SettingsPage";
+import ChipWarmupPage from "@/pages/ChipWarmupPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
