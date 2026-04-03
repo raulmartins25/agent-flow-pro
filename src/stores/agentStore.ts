@@ -1,0 +1,90 @@
+import { create } from 'zustand';
+
+interface AgentWizardData {
+  // Step 1
+  name: string;
+  type: 'receptive' | 'prospecting';
+  evolution_instance: string;
+  evolution_api_url: string;
+  evolution_api_key: string;
+  // Step 2
+  agent_persona_name: string;
+  company_name: string;
+  segment: string;
+  tone: 'formal' | 'semi-formal' | 'casual';
+  product_service_description: string;
+  ai_restrictions: string;
+  // Step 3
+  welcome_message: string;
+  first_prospecting_message: string;
+  // Step 4
+  qualification_questions: Array<{
+    id: string;
+    question: string;
+    followup_media_url?: string;
+    followup_media_type?: string;
+  }>;
+  // Step 5
+  objection_handlers: Array<{ objection: string; response: string }>;
+  followup_start_message: number;
+  followup_max: number;
+  followup_interval_minutes: number;
+  ban_triggers: string[];
+  // Step 6
+  transfer_number: string;
+  transfer_trigger: string;
+  transfer_summary_template: string;
+  llm_provider: 'claude' | 'openai' | 'deepseek';
+  llm_model: string;
+  llm_api_key: string;
+}
+
+interface AgentStore {
+  wizardData: AgentWizardData;
+  currentStep: number;
+  setCurrentStep: (step: number) => void;
+  updateWizardData: (data: Partial<AgentWizardData>) => void;
+  resetWizard: () => void;
+}
+
+const initialWizardData: AgentWizardData = {
+  name: '',
+  type: 'receptive',
+  evolution_instance: '',
+  evolution_api_url: '',
+  evolution_api_key: '',
+  agent_persona_name: '',
+  company_name: '',
+  segment: '',
+  tone: 'semi-formal',
+  product_service_description: '',
+  ai_restrictions: '',
+  welcome_message: 'Olá {{nome_contato}}! 👋 Sou {{nome_agente}} da {{empresa}}. Como posso te ajudar hoje?',
+  first_prospecting_message: 'Olá {{nome_contato}}! 👋 Sou {{nome_agente}} da {{empresa}}. Tudo bem?',
+  qualification_questions: [],
+  objection_handlers: [
+    { objection: 'Não tenho interesse', response: 'Entendo perfeitamente! Caso mude de ideia, estou à disposição. 😊' },
+    { objection: 'Já tenho fornecedor', response: 'Legal! Ter opções é sempre bom. Posso te mostrar nosso diferencial?' },
+    { objection: 'Tá caro', response: 'Compreendo! Vamos ver como podemos adequar à sua realidade?' },
+  ],
+  followup_start_message: 3,
+  followup_max: 3,
+  followup_interval_minutes: 120,
+  ban_triggers: ['para', 'stop', 'me tira', 'não quero', 'denuncia', 'spam', 'me bloqueia'],
+  transfer_number: '',
+  transfer_trigger: 'after_all_questions',
+  transfer_summary_template: '📋 *Resumo do Lead*\n\n👤 Nome: {{nome_contato}}\n📱 Telefone: {{telefone}}\n📅 Data: {{data}}\n\n{{perguntas_respostas}}',
+  llm_provider: 'claude',
+  llm_model: 'claude-sonnet-4-20250514',
+  llm_api_key: '',
+};
+
+export const useAgentStore = create<AgentStore>((set) => ({
+  wizardData: { ...initialWizardData },
+  currentStep: 0,
+  setCurrentStep: (step) => set({ currentStep: step }),
+  updateWizardData: (data) => set((state) => ({
+    wizardData: { ...state.wizardData, ...data },
+  })),
+  resetWizard: () => set({ wizardData: { ...initialWizardData }, currentStep: 0 }),
+}));
