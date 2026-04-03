@@ -242,6 +242,39 @@ export type Database = {
           },
         ]
       }
+      chip_warmups: {
+        Row: {
+          api_url: string
+          created_at: string
+          id: string
+          instance_name: string | null
+          provider: string
+          status: string
+          token: string | null
+          user_id: string
+        }
+        Insert: {
+          api_url: string
+          created_at?: string
+          id?: string
+          instance_name?: string | null
+          provider: string
+          status?: string
+          token?: string | null
+          user_id: string
+        }
+        Update: {
+          api_url?: string
+          created_at?: string
+          id?: string
+          instance_name?: string | null
+          provider?: string
+          status?: string
+          token?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           agent_id: string
