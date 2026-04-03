@@ -1,4 +1,4 @@
-import { Bot, LayoutDashboard, Inbox, Megaphone, Settings, LogOut, Sun, Moon } from 'lucide-react';
+import { Bot, LayoutDashboard, Inbox, Megaphone, Settings, LogOut, Sun, Moon, Flame } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
