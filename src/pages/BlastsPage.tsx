@@ -16,7 +16,8 @@ export default function BlastsPage() {
       .from('blast_campaigns')
       .select('*, agents(name)')
       .order('created_at', { ascending: false })
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) { console.error(error); }
         setCampaigns(data ?? []);
         setLoading(false);
       });
@@ -26,7 +27,7 @@ export default function BlastsPage() {
     pending: 'bg-muted text-muted-foreground',
     running: 'bg-primary/20 text-primary',
     paused: 'bg-warning/20 text-warning',
-    completed: 'bg-success/20 text-success',
+    completed: 'bg-primary/10 text-primary',
     error: 'bg-destructive/20 text-destructive',
   };
 
@@ -58,21 +59,23 @@ export default function BlastsPage() {
       ) : (
         <div className="space-y-3">
           {campaigns.map((c) => (
-            <Card key={c.id} className="hover:border-primary/30 transition-colors">
-              <CardContent className="flex items-center justify-between p-4">
-                <div>
-                  <p className="font-medium">{c.name}</p>
-                  <p className="text-xs text-muted-foreground">{c.agents?.name || 'Agente'}</p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="w-32">
-                    <Progress value={c.total_contacts > 0 ? (c.sent_count / c.total_contacts) * 100 : 0} className="h-2" />
-                    <p className="text-xs text-muted-foreground mt-1">{c.sent_count}/{c.total_contacts}</p>
+            <Link key={c.id} to={`/blasts/${c.id}`}>
+              <Card className="hover:border-primary/30 transition-colors cursor-pointer mb-3">
+                <CardContent className="flex items-center justify-between p-4">
+                  <div>
+                    <p className="font-medium">{c.name}</p>
+                    <p className="text-xs text-muted-foreground">{c.agents?.name || 'Agente'}</p>
                   </div>
-                  <Badge variant="secondary" className={statusColors[c.status] || ''}>{c.status}</Badge>
-                </div>
-              </CardContent>
-            </Card>
+                  <div className="flex items-center gap-4">
+                    <div className="w-32">
+                      <Progress value={c.total_contacts > 0 ? (c.sent_count / c.total_contacts) * 100 : 0} className="h-2" />
+                      <p className="text-xs text-muted-foreground mt-1">{c.sent_count}/{c.total_contacts}</p>
+                    </div>
+                    <Badge variant="secondary" className={statusColors[c.status] || ''}>{c.status}</Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       )}
