@@ -1,0 +1,77 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Bot, Plus } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+
+export default function Agents() {
+  const [agents, setAgents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.from('agents').select('*').order('created_at', { ascending: false }).then(({ data }) => {
+      setAgents(data ?? []);
+      setLoading(false);
+    });
+  }, []);
+
+  const statusColors: Record<string, string> = {
+    active: 'bg-primary/20 text-primary',
+    paused: 'bg-warning/20 text-warning',
+    inactive: 'bg-muted text-muted-foreground',
+  };
+
+  const typeLabels: Record<string, string> = {
+    receptive: 'Receptivo',
+    prospecting: 'Prospecção',
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Agentes</h1>
+          <p className="text-muted-foreground">Gerencie seus agentes de IA</p>
+        </div>
+        <Button asChild>
+          <Link to="/agents/new"><Plus className="mr-2 h-4 w-4" />Novo agente</Link>
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        </div>
+      ) : agents.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <Bot className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold">Nenhum agente criado</h3>
+            <p className="text-muted-foreground mb-4">Crie seu primeiro agente para começar</p>
+            <Button asChild><Link to="/agents/new"><Plus className="mr-2 h-4 w-4" />Criar agente</Link></Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {agents.map((agent) => (
+            <Link key={agent.id} to={`/agents/${agent.id}`}>
+              <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-base">{agent.name}</CardTitle>
+                  <Badge variant="secondary" className={statusColors[agent.status] || ''}>
+                    {agent.status}
+                  </Badge>
+                </CardHeader>
+                <CardContent>
+                  <Badge variant="outline">{typeLabels[agent.type] || agent.type}</Badge>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
