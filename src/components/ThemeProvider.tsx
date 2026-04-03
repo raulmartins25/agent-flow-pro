@@ -1,18 +1,18 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import * as React from 'react';
 
 type Theme = 'dark' | 'light' | 'system';
 
-const ThemeContext = createContext<{
+const ThemeContext = React.createContext<{
   theme: Theme;
   setTheme: (theme: Theme) => void;
 }>({ theme: 'dark', setTheme: () => {} });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() =>
+  const [theme, setTheme] = React.useState<Theme>(() =>
     (localStorage.getItem('agentflow-theme') as Theme) || 'dark'
   );
 
-  useEffect(() => {
+  React.useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove('light', 'dark');
 
@@ -32,4 +32,4 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export const useTheme = () => useContext(ThemeContext);
+export const useTheme = () => React.useContext(ThemeContext);
