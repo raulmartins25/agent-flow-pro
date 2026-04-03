@@ -22,6 +22,7 @@ const navItems = [
   { title: 'Agentes', url: '/agents', icon: Bot },
   { title: 'Inbox', url: '/inbox', icon: Inbox },
   { title: 'Disparos', url: '/blasts', icon: Megaphone },
+  { title: 'Aquecimento', url: '/warmup', icon: Flame },
   { title: 'Settings', url: '/settings', icon: Settings },
 ];
 

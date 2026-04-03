@@ -45,6 +45,7 @@ const App = () => (
               <Route path="/blasts" element={<BlastsPage />} />
               <Route path="/blasts/new" element={<NewBlastPage />} />
               <Route path="/blasts/:id" element={<BlastDetailPage />} />
+              <Route path="/warmup" element={<ChipWarmupPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
