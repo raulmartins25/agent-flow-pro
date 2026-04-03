@@ -1,11 +1,7 @@
 import * as React from 'react';
+import { ThemeContext } from '@/hooks/useTheme';
 
 type Theme = 'dark' | 'light' | 'system';
-
-const ThemeContext = React.createContext<{
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
-}>({ theme: 'dark', setTheme: () => {} });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = React.useState<Theme>(() =>
@@ -31,5 +27,3 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     </ThemeContext.Provider>
   );
 }
-
-export const useTheme = () => React.useContext(ThemeContext);
