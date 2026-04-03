@@ -1,86 +1,319 @@
-import { useEffect, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { MessageSquare, Search } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Search, Pause, Play, Send, Paperclip, MessageSquare, Download, X } from 'lucide-react';
+import { toast } from 'sonner';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+
+type Conversation = {
+  id: string;
+  agent_id: string;
+  contact_number: string;
+  contact_name: string | null;
+  status: string;
+  agent_paused: boolean;
+  last_message_at: string | null;
+  agents?: { name: string } | null;
+};
+
+type Message = {
+  id: string;
+  conversation_id: string;
+  role: string;
+  content: string | null;
+  media_url: string | null;
+  media_type: string | null;
+  created_at: string;
+};
 
 export default function InboxPage() {
-  const [conversations, setConversations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { conversationId } = useParams();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConv, setActiveConv] = useState<Conversation | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<'all' | 'active' | 'paused' | 'transferred'>('all');
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Load conversations
   useEffect(() => {
-    supabase
-      .from('conversations')
-      .select('*, agents(name)')
-      .order('last_message_at', { ascending: false })
-      .then(({ data }) => {
-        setConversations(data ?? []);
-        setLoading(false);
-      });
+    const fetch = async () => {
+      const { data } = await supabase
+        .from('conversations')
+        .select('*, agents(name)')
+        .order('last_message_at', { ascending: false });
+      setConversations((data as any[]) ?? []);
+      setLoading(false);
+    };
+    fetch();
+
+    // Realtime subscription for conversations
+    const channel = supabase
+      .channel('conversations-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' },
+        (payload: RealtimePostgresChangesPayload<any>) => {
+          if (payload.eventType === 'UPDATE') {
+            setConversations(prev => prev.map(c => c.id === payload.new.id ? { ...c, ...payload.new } : c));
+            if (activeConv?.id === payload.new.id) {
+              setActiveConv(prev => prev ? { ...prev, ...payload.new } : prev);
+            }
+          } else if (payload.eventType === 'INSERT') {
+            setConversations(prev => [payload.new as any, ...prev]);
+          }
+        })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const filtered = conversations.filter(
-    (c) => (c.contact_name || c.contact_number || '').toLowerCase().includes(search.toLowerCase())
-  );
+  // Load messages when conversation changes
+  useEffect(() => {
+    if (!activeConv) { setMessages([]); return; }
 
-  const statusColors: Record<string, string> = {
-    active: 'bg-primary/20 text-primary',
-    paused: 'bg-warning/20 text-warning',
-    transferred: 'bg-info/20 text-info',
-    closed: 'bg-muted text-muted-foreground',
+    const fetchMsgs = async () => {
+      const { data } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', activeConv.id)
+        .order('created_at', { ascending: true });
+      setMessages((data as Message[]) ?? []);
+    };
+    fetchMsgs();
+
+    // Realtime for messages
+    const channel = supabase
+      .channel(`messages-${activeConv.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'messages',
+        filter: `conversation_id=eq.${activeConv.id}`,
+      }, (payload: RealtimePostgresChangesPayload<any>) => {
+        setMessages(prev => [...prev, payload.new as Message]);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [activeConv?.id]);
+
+  // Auto-scroll
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Select conversation from URL
+  useEffect(() => {
+    if (conversationId && conversations.length) {
+      const c = conversations.find(c => c.id === conversationId);
+      if (c) setActiveConv(c);
+    }
+  }, [conversationId, conversations]);
+
+  const togglePause = async () => {
+    if (!activeConv) return;
+    const newVal = !activeConv.agent_paused;
+    await supabase.from('conversations').update({ agent_paused: newVal }).eq('id', activeConv.id);
+    setActiveConv({ ...activeConv, agent_paused: newVal });
+    toast.success(newVal ? 'Agente pausado' : 'Agente retomado');
+  };
+
+  const sendMessage = async () => {
+    if (!input.trim() || !activeConv) return;
+    const { error } = await supabase.from('messages').insert({
+      conversation_id: activeConv.id,
+      role: 'assistant',
+      content: input,
+    });
+    if (error) toast.error(error.message);
+    else setInput('');
+  };
+
+  const filtered = conversations.filter(c => {
+    const matchSearch = (c.contact_name || c.contact_number || '').toLowerCase().includes(search.toLowerCase());
+    const matchFilter = filter === 'all' ||
+      (filter === 'active' && c.status === 'active' && !c.agent_paused) ||
+      (filter === 'paused' && c.agent_paused) ||
+      (filter === 'transferred' && c.status === 'transferred');
+    return matchSearch && matchFilter;
+  });
+
+  const statusColor = (c: Conversation) => {
+    if (c.agent_paused) return 'bg-warning';
+    if (c.status === 'active') return 'bg-primary';
+    if (c.status === 'transferred') return 'bg-info';
+    return 'bg-muted-foreground';
+  };
+
+  const renderMedia = (msg: Message) => {
+    if (!msg.media_url) return null;
+    switch (msg.media_type) {
+      case 'image':
+        return (
+          <img
+            src={msg.media_url}
+            alt="Imagem"
+            className="max-w-[200px] rounded-lg cursor-pointer hover:opacity-80"
+            onClick={() => setLightboxUrl(msg.media_url)}
+          />
+        );
+      case 'audio':
+        return <audio controls src={msg.media_url} className="max-w-[250px]" />;
+      case 'document':
+        return (
+          <a href={msg.media_url} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-2 text-sm text-primary hover:underline">
+            <Download className="h-4 w-4" />Documento
+          </a>
+        );
+      case 'video':
+        return <video controls src={msg.media_url} className="max-w-[250px] rounded-lg" />;
+      default: return null;
+    }
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Inbox</h1>
-        <p className="text-muted-foreground">Conversas dos seus agentes</p>
-      </div>
-
-      <div className="relative">
-        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por nome ou número..."
-          className="pl-10"
-        />
-      </div>
-
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+    <div className="flex h-[calc(100vh-5rem)] -m-6 border-t">
+      {/* Conversation List */}
+      <div className="w-80 border-r flex flex-col bg-background">
+        <div className="p-3 border-b space-y-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar..." className="pl-9 h-9" />
+          </div>
+          <div className="flex gap-1">
+            {(['all', 'active', 'paused', 'transferred'] as const).map(f => (
+              <button key={f} onClick={() => setFilter(f)}
+                className={`text-xs px-2 py-1 rounded-md transition-colors ${filter === f ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
+                {f === 'all' ? 'Todas' : f === 'active' ? 'Ativas' : f === 'paused' ? 'Pausadas' : 'Transferidas'}
+              </button>
+            ))}
+          </div>
         </div>
-      ) : filtered.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center py-12 text-center">
-            <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold">Nenhuma conversa</h3>
-            <p className="text-muted-foreground">As conversas aparecerão aqui quando leads entrarem em contato</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map((conv) => (
-            <Card key={conv.id} className="hover:border-primary/30 transition-colors cursor-pointer">
-              <CardContent className="flex items-center justify-between p-4">
-                <div className="flex items-center gap-3">
+
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center py-8 text-center px-4">
+              <MessageSquare className="h-8 w-8 text-muted-foreground mb-2" />
+              <p className="text-sm text-muted-foreground">Nenhuma conversa</p>
+            </div>
+          ) : filtered.map(c => (
+            <button key={c.id} onClick={() => setActiveConv(c)}
+              className={`w-full text-left p-3 border-b hover:bg-muted/50 transition-colors ${activeConv?.id === c.id ? 'bg-muted' : ''}`}>
+              <div className="flex items-center gap-3">
+                <div className="relative">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-sm">
-                    {(conv.contact_name || conv.contact_number || '?')[0].toUpperCase()}
+                    {(c.contact_name || c.contact_number || '?')[0].toUpperCase()}
                   </div>
-                  <div>
-                    <p className="font-medium text-sm">{conv.contact_name || conv.contact_number}</p>
-                    <p className="text-xs text-muted-foreground">{conv.agents?.name || 'Agente'}</p>
+                  <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${statusColor(c)}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">{c.contact_name || c.contact_number}</p>
+                  <p className="text-xs text-muted-foreground truncate">{(c as any).agents?.name || 'Agente'}</p>
+                </div>
+                {c.last_message_at && (
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(c.last_message_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Chat Area */}
+      <div className="flex-1 flex flex-col">
+        {!activeConv ? (
+          <div className="flex-1 flex items-center justify-center text-muted-foreground">
+            <div className="text-center">
+              <MessageSquare className="h-12 w-12 mx-auto mb-3" />
+              <p>Selecione uma conversa</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Header */}
+            <div className="h-14 border-b flex items-center justify-between px-4 bg-background">
+              <div>
+                <p className="font-medium text-sm">{activeConv.contact_name || activeConv.contact_number}</p>
+                <p className="text-xs text-muted-foreground">{activeConv.contact_number}</p>
+              </div>
+              <Button
+                variant={activeConv.agent_paused ? 'default' : 'outline'}
+                size="sm"
+                onClick={togglePause}
+              >
+                {activeConv.agent_paused ? <><Play className="mr-1 h-3 w-3" />Retomar</> : <><Pause className="mr-1 h-3 w-3" />Pausar</>}
+              </Button>
+            </div>
+
+            {activeConv.agent_paused && (
+              <div className="bg-warning/20 text-warning px-4 py-2 text-xs font-medium text-center">
+                ⏸ Agente pausado — você está no controle
+              </div>
+            )}
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-muted/30">
+              {messages.map(msg => (
+                <div key={msg.id} className={`flex ${msg.role === 'assistant' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[70%] rounded-xl px-4 py-2 text-sm ${
+                    msg.role === 'assistant'
+                      ? 'bg-primary/20 text-foreground rounded-br-sm'
+                      : 'bg-card text-foreground rounded-bl-sm border'
+                  }`}>
+                    {renderMedia(msg)}
+                    {msg.content && <p className="whitespace-pre-wrap">{msg.content}</p>}
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
                   </div>
                 </div>
-                <Badge variant="secondary" className={statusColors[conv.status] || ''}>
-                  {conv.status}
-                </Badge>
-              </CardContent>
-            </Card>
-          ))}
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input */}
+            <div className="border-t p-3 bg-background">
+              {!activeConv.agent_paused ? (
+                <div className="text-center text-xs text-muted-foreground py-2">
+                  Agente está no controle. Pause para intervir.
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                    placeholder="Digite uma mensagem..."
+                    className="flex-1"
+                  />
+                  <Button size="icon" onClick={sendMessage} disabled={!input.trim()}>
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center" onClick={() => setLightboxUrl(null)}>
+          <button className="absolute top-4 right-4 text-white" onClick={() => setLightboxUrl(null)}>
+            <X className="h-6 w-6" />
+          </button>
+          <img src={lightboxUrl} alt="Preview" className="max-w-[90vw] max-h-[90vh] object-contain" />
         </div>
       )}
     </div>
