@@ -14,6 +14,14 @@ import { toast } from 'sonner';
 
 const ACCEPTED_TYPES = '.pdf,.mp4,.mp3,.ogg,.jpg,.png,.jpeg';
 
+function sanitizeFileName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .replace(/_+/g, '_');
+}
+
 function getFileType(file: File): 'image' | 'audio' | 'document' | 'video' {
   if (file.type.startsWith('image/')) return 'image';
   if (file.type.startsWith('audio/')) return 'audio';
