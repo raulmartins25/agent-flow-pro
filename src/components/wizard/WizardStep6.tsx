@@ -1,10 +1,14 @@
+import { useRef, useCallback, useState } from 'react';
 import { useAgentStore } from '@/stores/agentStore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Sparkles, Zap, DollarSign } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Sparkles, Zap, DollarSign, Smile } from 'lucide-react';
 
 const llmOptions = [
   { provider: 'claude' as const, model: 'claude-sonnet-4-20250514', name: 'Claude Sonnet', desc: 'Melhor qualidade', speed: '⚡⚡', quality: '⭐⭐⭐⭐⭐', cost: '$$' },
@@ -14,16 +18,67 @@ const llmOptions = [
   { provider: 'deepseek' as const, model: 'deepseek-v3', name: 'DeepSeek V3', desc: 'Chave API DeepSeek', speed: '⚡⚡', quality: '⭐⭐⭐⭐', cost: '$' },
 ];
 
+const standardVars = [
+  { label: '👤 Nome', value: '{{nome_contato}}' },
+  { label: '📱 Telefone', value: '{{telefone}}' },
+  { label: '📅 Data', value: '{{data}}' },
+  { label: '🤖 Agente', value: '{{agente}}' },
+  { label: '📋 Todas P&R', value: '{{perguntas_respostas}}' },
+];
+
+const emojiList = [
+  '👋', '😊', '✅', '📋', '👤', '📱', '📅', '🎯', '💰', '🔥',
+  '⭐', '📝', '📞', '💼', '🏢', '❤️', '👍', '🙏', '🚀', '💡',
+  '✨', '🏆', '💪', '🤝', '📊', '🔑', '💳', '🛒', '📦', '🎉',
+];
+
 export function WizardStep6() {
   const { wizardData, updateWizardData } = useAgentStore();
   const needsApiKey = wizardData.llm_provider === 'openai' || wizardData.llm_provider === 'deepseek';
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [emojiOpen, setEmojiOpen] = useState(false);
 
-  const preview = wizardData.transfer_summary_template
+  const insertAtCursor = useCallback((text: string) => {
+    const el = textareaRef.current;
+    if (!el) {
+      updateWizardData({ transfer_summary_template: wizardData.transfer_summary_template + text });
+      return;
+    }
+    const start = el.selectionStart ?? wizardData.transfer_summary_template.length;
+    const end = el.selectionEnd ?? start;
+    const before = wizardData.transfer_summary_template.slice(0, start);
+    const after = wizardData.transfer_summary_template.slice(end);
+    const newVal = before + text + after;
+    updateWizardData({ transfer_summary_template: newVal });
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + text.length;
+      el.setSelectionRange(pos, pos);
+    });
+  }, [wizardData.transfer_summary_template, updateWizardData]);
+
+  const questions = wizardData.qualification_questions || [];
+
+  // Build preview
+  let preview = wizardData.transfer_summary_template
     .replace(/\{\{nome_contato\}\}/g, 'João Silva')
     .replace(/\{\{telefone\}\}/g, '+5511999999999')
     .replace(/\{\{data\}\}/g, new Date().toLocaleDateString('pt-BR'))
-    .replace(/\{\{agente\}\}/g, wizardData.agent_persona_name || 'Meu Agente')
-    .replace(/\{\{perguntas_respostas\}\}/g, '1. Orçamento: R$5.000\n2. Prazo: 30 dias');
+    .replace(/\{\{agente\}\}/g, wizardData.agent_persona_name || 'Meu Agente');
+
+  // Replace individual question vars
+  questions.forEach((q: any, i: number) => {
+    const num = i + 1;
+    preview = preview
+      .replace(new RegExp(`\\{\\{pergunta_${num}\\}\\}`, 'g'), q.question || `Pergunta ${num}`)
+      .replace(new RegExp(`\\{\\{resposta_${num}\\}\\}`, 'g'), `Resposta do lead ${num}`);
+  });
+
+  // Replace bulk
+  const bulkExample = questions.length > 0
+    ? questions.map((q: any, i: number) => `*${i + 1}. ${q.question}*\n→ Resposta do lead`).join('\n')
+    : '1. Orçamento: R$5.000\n2. Prazo: 30 dias';
+  preview = preview.replace(/\{\{perguntas_respostas\}\}/g, bulkExample);
 
   return (
     <div className="space-y-6">
@@ -46,10 +101,91 @@ export function WizardStep6() {
             </Select>
           </div>
         </div>
+
+        {/* Rich template editor */}
         <div className="space-y-2">
           <Label className="text-xs">Template do resumo</Label>
-          <Textarea value={wizardData.transfer_summary_template} onChange={(e) => updateWizardData({ transfer_summary_template: e.target.value })} rows={4} />
+
+          {/* Variable chips */}
+          <div className="flex flex-wrap gap-1.5 items-center">
+            {standardVars.map((v) => (
+              <Badge
+                key={v.value}
+                variant="outline"
+                className="cursor-pointer hover:bg-primary/10 transition-colors text-xs"
+                onClick={() => insertAtCursor(v.value)}
+              >
+                {v.label}
+              </Badge>
+            ))}
+
+            {/* Emoji picker */}
+            <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-6 w-6 p-0">
+                  <Smile className="h-3.5 w-3.5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-2" align="start">
+                <div className="grid grid-cols-10 gap-1">
+                  {emojiList.map((emoji) => (
+                    <button
+                      key={emoji}
+                      className="text-lg hover:bg-muted rounded p-0.5 transition-colors"
+                      onClick={() => { insertAtCursor(emoji); setEmojiOpen(false); }}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Question-specific variables */}
+          {questions.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground font-medium">Perguntas cadastradas:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {questions.map((q: any, i: number) => {
+                  const num = i + 1;
+                  const truncated = (q.question || '').length > 20
+                    ? (q.question || '').slice(0, 20) + '…'
+                    : (q.question || `Pergunta ${num}`);
+                  return (
+                    <div key={q.id} className="flex gap-1">
+                      <Badge
+                        variant="outline"
+                        className="cursor-pointer hover:bg-primary/10 transition-colors text-xs"
+                        onClick={() => insertAtCursor(`{{pergunta_${num}}}`)}
+                      >
+                        📝 P{num}: {truncated}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className="cursor-pointer hover:bg-primary/10 transition-colors text-xs"
+                        onClick={() => insertAtCursor(`{{resposta_${num}}}`)}
+                      >
+                        💬 R{num}
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {questions.length === 0 && (
+            <p className="text-xs text-muted-foreground italic">Cadastre perguntas no Step 4 para usar variáveis individuais</p>
+          )}
+
+          <Textarea
+            ref={textareaRef}
+            value={wizardData.transfer_summary_template}
+            onChange={(e) => updateWizardData({ transfer_summary_template: e.target.value })}
+            rows={6}
+          />
         </div>
+
         <div className="rounded-lg bg-muted/50 p-4">
           <p className="text-xs font-medium text-muted-foreground mb-2">Preview do resumo:</p>
           <pre className="text-sm whitespace-pre-wrap">{preview}</pre>
