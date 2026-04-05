@@ -1,31 +1,41 @@
 
 
-# Redirecionamento de Contato — Prompt + Resumo de Transferência
+# Correção: IA continua qualificando após transferência
 
-## Mudanças
+## Problema
+Quando a conversa já está `transferred`, o `process-message` continua enviando o prompt completo de qualificação para a IA. O `alreadyTransferred` só bloqueia a transferência duplicada, mas não muda o comportamento da IA.
 
-### 1. `src/lib/compilePrompt.ts`
+## Solução
 
-Inserir novo bloco **REDIRECIONAMENTO DE CONTATO** logo após a seção `TRATAMENTO DE OBJEÇÕES` (após `${objectionsFormatted}`, linha ~129). O bloco instrui a IA a:
+### 1. `supabase/functions/process-message/index.ts` — Early return para conversas transferidas
 
-- Detectar quando o lead indica não ser o decisor (ex: "fala com o Tarik", "não sou eu", "é com meu sócio")
-- Passo 1: Validar, demonstrar empatia, pedir o WhatsApp da pessoa certa
-- Passo 2a: Se receber o contato → agradecer + emitir `TRANSFER_LEAD` + incluir no resumo `*Contato indicado:* [nome] — [número]`
-- Passo 2b: Se recusar → tentar uma vez diferente ("Posso deixar uma mensagem com você?") → se recusar novamente, encerrar com `TRANSFER_LEAD` para notificar a equipe
-- Passo 3: NUNCA continuar o fluxo de qualificação após identificar que não é o decisor
+Logo após buscar o `convStatus` (linha ~236-241), **antes** de chamar a IA com o prompt de qualificação, interceptar e usar um prompt livre:
 
-### 2. `supabase/functions/process-message/index.ts`
+- Mover a query de `convStatus` para **antes** da construção do `systemPrompt` (logo após obter `config`, `device`, etc. — ~linha 115)
+- Se `convStatus === 'transferred'`:
+  - Montar um system prompt simplificado: "Você é [persona] da [empresa]. Esta conversa já foi encerrada e o lead foi transferido para a equipe. Responda de forma breve e cordial. NÃO faça perguntas de qualificação. NÃO emita TRANSFER_LEAD. Se perguntarem sobre próximos passos, diga que a equipe entrará em contato."
+  - Chamar a IA normalmente com esse prompt + histórico recente (últimas 10 mensagens)
+  - Salvar resposta e enviar via WhatsApp
+  - **Return** imediatamente — sem passar pelo fluxo de transferência/mídia
 
-No bloco de montagem do `summary` (linhas ~265-299), após montar o resumo:
+### 2. `src/lib/compilePrompt.ts` — Reforço no bloco de transferência
 
-- Usar regex `/\d{8,15}/` na última mensagem do lead antes da transferência para capturar número indicado
-- Se encontrar: adicionar `*Contato indicado pelo lead:* [número]` ao summary
-- Se `answeredQuestions < totalQuestions / 2`: adicionar `*Observação:* Lead indicou que não é o decisor. Contato acima para follow-up.`
+Após a linha 159 (item 4 do bloco TRANSFERÊNCIA), adicionar:
+
+```
+APÓS EMITIR TRANSFER_LEAD:
+- A conversa está ENCERRADA para fins de qualificação
+- Se o lead enviar novas mensagens, responda APENAS dúvidas gerais de forma breve
+- NUNCA volte ao script de perguntas
+- NUNCA emita TRANSFER_LEAD novamente
+- NUNCA peça informações de qualificação novamente
+- Se perguntarem sobre próximos passos: "Nossa equipe já tem suas informações e entrará em contato em breve!"
+```
 
 ## Arquivos impactados
 
 | Arquivo | Mudança |
 |---|---|
-| `src/lib/compilePrompt.ts` | Bloco de redirecionamento de contato no prompt |
-| `supabase/functions/process-message/index.ts` | Detecção de contato indicado e observação no resumo |
+| `supabase/functions/process-message/index.ts` | Early return com prompt livre para conversas transferidas |
+| `src/lib/compilePrompt.ts` | Bloco pós-transferência reforçado |
 
