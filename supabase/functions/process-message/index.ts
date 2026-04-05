@@ -146,10 +146,47 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       });
     }
 
+    // --- TRANSFER_LEAD detection ---
+    const shouldTransfer = aiResponse.includes('TRANSFER_LEAD');
+    let cleanResponse = aiResponse.replace(/TRANSFER_LEAD/g, '').trim();
+
+    if (shouldTransfer && agentFull?.transfer_number && device) {
+      const userMessages = history.filter((m: any) => m.role === "user");
+      const questions = (config?.qualification_questions as any[]) || [];
+
+      let summary = `*Novo lead qualificado* ✅\n\n`;
+      summary += `*Telefone:* ${contact_number}\n`;
+      summary += `*Data:* ${new Date().toLocaleString('pt-BR')}\n`;
+      summary += `*Agente:* ${agentFull.name}\n\n`;
+      summary += `*Respostas do lead:*\n`;
+
+      questions.forEach((q: any, index: number) => {
+        const answer = userMessages[index + (agentFull.type === 'prospecting' ? 1 : 0)];
+        summary += `\n*${index + 1}. ${q.question}*\n`;
+        summary += `→ ${answer?.content || 'Não respondida'}\n`;
+      });
+
+      try {
+        await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", apikey: evoKey || "" },
+          body: JSON.stringify({ number: agentFull.transfer_number, text: summary }),
+        });
+        console.log(`Lead transferido para: ${agentFull.transfer_number}`);
+      } catch (transferErr) {
+        console.error("Error sending transfer summary:", transferErr);
+      }
+
+      await supabase
+        .from("conversations")
+        .update({ status: "transferred" })
+        .eq("id", conversation_id);
+    }
+
     // --- SEND_MEDIA detection ---
     const mediaRegex = /SEND_MEDIA:([a-f0-9-]+)/gi;
-    const mediaMatches = [...aiResponse.matchAll(mediaRegex)];
-    let cleanResponse = aiResponse.replace(mediaRegex, "").replace(/\s{2,}/g, " ").trim();
+    const mediaMatches = [...cleanResponse.matchAll(mediaRegex)];
+    cleanResponse = cleanResponse.replace(mediaRegex, "").replace(/\s{2,}/g, " ").trim();
 
     for (const match of mediaMatches) {
       const questionId = match[1];
@@ -209,36 +246,6 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       });
     }
 
-    // --- TRANSFER CHECK ---
-    if (config?.qualification_questions && agentFull?.transfer_number) {
-      const qList = config.qualification_questions as any[];
-      const userMessages = history.filter((m: any) => m.role === "user");
-      const transferTrigger = agentFull.transfer_trigger || "after_all_questions";
-
-      if (transferTrigger === "after_all_questions" && userMessages.length >= qList.length && qList.length > 0) {
-        let summary = (config.transfer_summary_template || "📋 Resumo do Lead\n\n{{perguntas_respostas}}")
-          .replace("{{nome_contato}}", contact_number)
-          .replace("{{telefone}}", contact_number)
-          .replace("{{data}}", new Date().toLocaleDateString("pt-BR"));
-
-        const qaPairs = qList.map((q: any, i: number) => {
-          const answer = userMessages[i]?.content || "—";
-          return `❓ ${q.question}\n💬 ${answer}`;
-        }).join("\n\n");
-        summary = summary.replace("{{perguntas_respostas}}", qaPairs);
-
-        await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", apikey: evoKey || "" },
-          body: JSON.stringify({ number: agentFull.transfer_number, text: summary }),
-        });
-
-        await supabase
-          .from("conversations")
-          .update({ status: "transferred" })
-          .eq("id", conversation_id);
-      }
-    }
 
     return new Response(JSON.stringify({ ok: true, response: cleanResponse || aiResponse }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
