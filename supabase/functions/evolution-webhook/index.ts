@@ -29,7 +29,6 @@ serve(async (req) => {
         msg.message?.imageMessage?.caption || "";
       const instanceName = instance?.instanceName || "";
 
-      // Find agent by instance
       const { data: agent } = await supabase
         .from("agents")
         .select("id, user_id, status, type, prompt_compiled, llm_provider, llm_model, llm_api_key")
@@ -43,7 +42,6 @@ serve(async (req) => {
         });
       }
 
-      // Find or create conversation
       let { data: conversation } = await supabase
         .from("conversations")
         .select("*")
@@ -80,6 +78,59 @@ serve(async (req) => {
       else if (msg.message?.documentMessage) { mediaType = "document"; }
       else if (msg.message?.videoMessage) { mediaType = "video"; }
 
+      // --- PROSPECTING: Lead replied to blast (is_waiting_reply) ---
+      if (!fromMe && conversation.is_waiting_reply) {
+        // Flip waiting flag
+        await supabase
+          .from("conversations")
+          .update({ is_waiting_reply: false })
+          .eq("id", conversation.id);
+
+        // Save lead's message
+        await supabase.from("messages").insert({
+          conversation_id: conversation.id,
+          role: "user",
+          content,
+          media_url: mediaUrl,
+          media_type: mediaType,
+        });
+
+        // Update last_message_at
+        await supabase
+          .from("conversations")
+          .update({ last_message_at: new Date().toISOString() })
+          .eq("id", conversation.id);
+
+        // Get history for AI
+        const { data: history } = await supabase
+          .from("messages")
+          .select("role, content")
+          .eq("conversation_id", conversation.id)
+          .order("created_at", { ascending: true })
+          .limit(50);
+
+        // Trigger AI
+        const processUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-message`;
+        await fetch(processUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            conversation_id: conversation.id,
+            agent,
+            history: history || [],
+            contact_number: remoteJid,
+            instance_name: instanceName,
+          }),
+        });
+
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       // Save incoming message
       const role = fromMe ? "assistant" : "user";
       await supabase.from("messages").insert({
@@ -96,16 +147,8 @@ serve(async (req) => {
         .update({ last_message_at: new Date().toISOString() })
         .eq("id", conversation.id);
 
-      // --- PROSPECTING FLOW: If agent_paused (set by blast-processor), this is the first lead reply ---
-      if (!fromMe && conversation.agent_paused && agent.type === "prospecting") {
-        // Lead replied to blast — activate AI by flipping agent_paused
-        await supabase
-          .from("conversations")
-          .update({ agent_paused: false })
-          .eq("id", conversation.id);
-        // Continue to AI processing below (don't skip)
-      } else if (conversation.agent_paused || fromMe) {
-        // Agent is manually paused or message is from us — skip AI processing
+      // Skip AI if agent_paused or fromMe
+      if (conversation.agent_paused || fromMe) {
         return new Response(JSON.stringify({ ok: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -119,7 +162,7 @@ serve(async (req) => {
         .order("created_at", { ascending: true })
         .limit(50);
 
-      // Call process-message function
+      // Call process-message
       const processUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-message`;
       await fetch(processUrl, {
         method: "POST",
