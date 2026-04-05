@@ -8,7 +8,17 @@ interface AgentData {
   ai_restrictions: string;
   welcome_message: string;
   first_prospecting_message: string;
-  qualification_questions: Array<{ id: string; question: string }>;
+  qualification_questions: Array<{
+    id: string;
+    question: string;
+    media?: {
+      offer_message: string;
+      file_url: string;
+      file_name: string;
+      file_type: 'image' | 'audio' | 'document' | 'video';
+      send_condition: 'positive_response' | 'always' | 'explicit_yes';
+    };
+  }>;
   objection_handlers: Array<{ objection: string; response: string }>;
   followup_start_message: number;
   followup_max: number;
@@ -25,9 +35,28 @@ const toneDescriptions: Record<string, string> = {
   casual: 'Descontraído e amigável. Use linguagem casual, emojis ocasionais, gírias leves.',
 };
 
+const conditionTexts: Record<string, string> = {
+  positive_response: 'demonstrar interesse ou responder positivamente',
+  always: '(envie automaticamente, sem perguntar)',
+  explicit_yes: "responder explicitamente com 'sim' ou 'pode'",
+};
+
 export function compileAgentPrompt(data: AgentData): string {
   const questionsFormatted = data.qualification_questions
-    .map((q, i) => `${i + 1}. "${q.question}"`)
+    .map((q, i) => {
+      let line = `${i + 1}. "${q.question}"`;
+      if (q.media?.file_url) {
+        const cond = conditionTexts[q.media.send_condition] || conditionTexts.positive_response;
+        line += `\n  ↳ Após esta pergunta, se o lead ${cond}, faça a oferta: "${q.media.offer_message}"`;
+        if (q.media.send_condition === 'always') {
+          line += `\n  Inclua exatamente o texto SEND_MEDIA:${q.id} na sua resposta junto com a oferta.`;
+        } else {
+          line += `\n  Se aceitar: inclua exatamente o texto SEND_MEDIA:${q.id} na sua resposta.`;
+          line += `\n  Se recusar: continue normalmente para a próxima pergunta. NUNCA envie mídia sem perguntar.`;
+        }
+      }
+      return line;
+    })
     .join('\n') || 'Nenhuma pergunta configurada.';
 
   const objectionsFormatted = data.objection_handlers
@@ -102,5 +131,8 @@ Se o lead demonstrar irritação, usar as palavras-chave de encerramento (${data
 3. NUNCA tente reconverter um lead que pediu para parar.
 
 ESTADO DA CONVERSA:
-Você tem acesso ao histórico completo da conversa. Use-o para não repetir perguntas já respondidas e para personalizar suas respostas.`;
+Você tem acesso ao histórico completo da conversa. Use-o para não repetir perguntas já respondidas e para personalizar suas respostas.
+
+INSTRUÇÃO SOBRE MÍDIA:
+Quando sua resposta contiver o token SEND_MEDIA:{id}, o sistema enviará automaticamente o arquivo correspondente ao lead. O token será removido da mensagem visível. Nunca explique o token ao lead.`;
 }
