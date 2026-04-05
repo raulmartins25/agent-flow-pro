@@ -1,90 +1,51 @@
 
 
-# Mídia Condicional nas Perguntas de Qualificação (Step 4)
+# Diagnóstico: Agente não responde + Inbox vazio
 
-## Visão Geral
-Adicionar suporte a upload de mídia em cada pergunta de qualificação, com mensagem de oferta, upload para Storage, e envio condicional via Evolution API quando a LLM emitir `SEND_MEDIA:{id}`.
+## Problemas encontrados (3 causas raiz)
+
+### 1. Formato de número incompatível entre Blast e Webhook
+O blast-processor salva `contact_number` como `5562995085665@s.whatsapp.net`. O webhook normaliza para `556295085665` (sem sufixo). Como os formatos não batem, o webhook **cria uma conversa NOVA** em vez de encontrar a do blast. A conversa original com `is_waiting_reply: true` nunca é atualizada.
+
+**Evidência no banco:**
+- Conversa do blast: `5562995085665@s.whatsapp.net` (is_waiting_reply: true) — nunca tocada
+- Conversa do webhook: `556295085665` (is_waiting_reply: false) — criada do zero
+
+### 2. process-message retorna 500 (Empty AI response)
+O agente usa `deepseek` com modelo `deepseek-v3`. A chamada à API DeepSeek falha silenciosamente (retorna resposta vazia), e o código apenas retorna "Empty AI response" sem logar o erro. Resultado: a IA nunca responde.
+
+### 3. Inbox funciona, mas as conversas existem duplicadas
+A query e RLS estão corretas. As 2 conversas existem no banco. O inbox deve estar mostrando-as (ou o problema é que o `agents!inner` filtra por `user_id` mas o select não inclui esse filtro explícito — o RLS já cuida disso).
 
 ---
 
-## 1. Migração SQL — Bucket `agent-media`
+## Correções
 
-```sql
-INSERT INTO storage.buckets (id, name, public) VALUES ('agent-media', 'agent-media', true);
+### A. `blast-processor/index.ts` — Normalizar contact_number
+- Ao criar a conversa, **remover o sufixo** `@s.whatsapp.net` e `@g.us` do `contact.phone` antes de salvar em `contact_number`
+- Isso garante que o formato bate com o que o webhook usa
 
-CREATE POLICY "Public read agent-media" ON storage.objects FOR SELECT USING (bucket_id = 'agent-media');
-CREATE POLICY "Authenticated upload agent-media" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'agent-media');
-CREATE POLICY "Authenticated delete agent-media" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'agent-media');
-```
+### B. `evolution-webhook/index.ts` — Busca flexível
+- Ao buscar conversa existente, também tentar match com `contact_number + '@s.whatsapp.net'` como fallback
+- Ou normalizar ambos os lados para o mesmo formato (só dígitos)
 
-## 2. `src/stores/agentStore.ts` — Atualizar tipo
+### C. `process-message/index.ts` — Logging e fallback do DeepSeek
+- Adicionar log do response body quando a API DeepSeek retorna resposta vazia
+- Verificar se `res.ok` antes de fazer parse do JSON
+- Logar claramente: provider, model, status code, response body (truncado)
 
-Substituir os campos `followup_media_url?` e `followup_media_type?` pela nova estrutura `media?`:
-
-```typescript
-qualification_questions: Array<{
-  id: string;
-  question: string;
-  media?: {
-    offer_message: string;
-    file_url: string;
-    file_name: string;
-    file_type: 'image' | 'audio' | 'document' | 'video';
-    send_condition: 'positive_response' | 'always' | 'explicit_yes';
-  };
-}>;
-```
-
-## 3. `src/components/wizard/WizardStep4.tsx` — UI completa
-
-Cada pergunta ganha um botão colapsável "+ Anexar mídia" usando `Collapsible`. Ao expandir:
-
-- **Textarea** "Mensagem de oferta" — placeholder: "Ex: Posso te enviar nosso portfólio para você ver como trabalhamos?"
-- **Upload de arquivo** — aceita `.pdf,.mp4,.mp3,.ogg,.jpg,.png,.jpeg`. Faz upload via `supabase.storage.from('agent-media').upload(...)`. Mostra barra de progresso. Preview por tipo de arquivo (thumbnail, ícone PDF, ícone mic, ícone play). Botão X para remover.
-- **Select** "Quando enviar?" — 3 opções: positive_response (default), always, explicit_yes.
-
-Path no storage: `{question_id}/{filename}` (sem agent_id pois o agente ainda não existe no momento da criação).
-
-## 4. `src/lib/compilePrompt.ts` — Instruções de mídia no prompt
-
-Atualizar o tipo `AgentData.qualification_questions` para incluir `media?`. Na formatação das perguntas, para cada uma que tiver `media`:
-
-```
-Pergunta N: "pergunta"
-  ↳ Após esta pergunta, se o lead [condição], faça a oferta: "offer_message"
-  Se aceitar: inclua exatamente o texto SEND_MEDIA:{question_id} na sua resposta.
-  Se recusar: continue normalmente. NUNCA envie mídia sem perguntar (exceto 'always').
-```
-
-Mapeamento de condição:
-- `positive_response` → "demonstrar interesse ou responder positivamente"
-- `always` → "(envie automaticamente, sem perguntar)"
-- `explicit_yes` → "responder explicitamente com 'sim' ou 'pode'"
-
-## 5. `supabase/functions/process-message/index.ts` — Detectar e enviar mídia
-
-Após gerar `aiResponse`, antes de salvar/enviar:
-
-1. Regex para encontrar `SEND_MEDIA:([a-f0-9-]+)` no texto
-2. Para cada match: buscar a pergunta no `config.qualification_questions` pelo ID
-3. Determinar endpoint Evolution por `file_type`:
-   - `image` → `sendMedia` com `mediatype: "image"`
-   - `audio` → `sendWhatsAppAudio` (PTT)
-   - `document` → `sendMedia` com `mediatype: "document"`
-   - `video` → `sendMedia` com `mediatype: "video"`
-4. Enviar via Evolution API
-5. Salvar mensagem de mídia em `messages` com `media_url` e `media_type`
-6. Remover tokens `SEND_MEDIA:...` do texto antes de salvar/enviar o texto
+### D. Limpar dados duplicados
+- A conversa órfã do blast (`c11c94ae`, com `@s.whatsapp.net`) ficará sem uso. Não precisa de migração — basta que novos disparos usem o formato correto.
 
 ---
 
 ## Arquivos impactados
 
-| Arquivo | Ação |
+| Arquivo | Mudança |
 |---|---|
-| Migração SQL | Bucket `agent-media` + políticas |
-| `src/stores/agentStore.ts` | Tipo `media?` nas questions |
-| `src/components/wizard/WizardStep4.tsx` | UI upload + collapsible |
-| `src/lib/compilePrompt.ts` | Instruções SEND_MEDIA no prompt |
-| `supabase/functions/process-message/index.ts` | Detectar token + enviar mídia |
+| `supabase/functions/blast-processor/index.ts` | Strip `@s.whatsapp.net` do contact_number |
+| `supabase/functions/evolution-webhook/index.ts` | Busca flexível por contact_number |
+| `supabase/functions/process-message/index.ts` | Logging de erro na chamada DeepSeek |
+
+Sem migração SQL. Sem mudanças no frontend.
 
