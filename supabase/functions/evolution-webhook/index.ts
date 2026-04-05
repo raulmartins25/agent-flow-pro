@@ -84,6 +84,7 @@ serve(async (req) => {
       }
 
       // Find or create conversation scoped by agent_id + device_id
+      // Try exact match first, then with @s.whatsapp.net suffix as fallback
       let { data: conversation } = await supabase
         .from("conversations")
         .select("*")
@@ -92,6 +93,24 @@ serve(async (req) => {
         .eq("contact_number", remoteJid)
         .in("status", ["active", "paused"])
         .single();
+
+      if (!conversation) {
+        const { data: fallbackConv } = await supabase
+          .from("conversations")
+          .select("*")
+          .eq("agent_id", agent.id)
+          .eq("device_id", device.id)
+          .or(`contact_number.eq.${remoteJid}@s.whatsapp.net,contact_number.eq.${remoteJid}@g.us`)
+          .in("status", ["active", "paused"])
+          .single();
+        if (fallbackConv) {
+          // Normalize the stored number
+          await supabase.from("conversations").update({ contact_number: remoteJid }).eq("id", fallbackConv.id);
+          fallbackConv.contact_number = remoteJid;
+          conversation = fallbackConv;
+          console.log("Found conversation with suffix, normalized to:", remoteJid);
+        }
+      }
 
       if (!conversation) {
         const { data: newConv } = await supabase

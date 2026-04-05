@@ -103,13 +103,14 @@ serve(async (req) => {
         );
 
         if (res.ok) {
+          const normalizedPhone = contact.phone.replace(/@s\.whatsapp\.net$/, "").replace(/@g\.us$/, "");
           const { data: conversation } = await supabase
             .from("conversations")
             .insert({
               agent_id: agent.id,
               device_id: device.id,
               instance_name: device.instance_name,
-              contact_number: contact.phone,
+              contact_number: normalizedPhone,
               contact_name: contact.name || contact.phone,
               status: "active",
               is_waiting_reply: true,
