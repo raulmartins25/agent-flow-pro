@@ -1,54 +1,41 @@
 
+# Resetar o Raul e parar as transferências repetidas
 
-# Correção: Transferência e Mídia Não Executam
+## Diagnóstico confirmado
+- Seu palpite está certo: hoje o sistema está reutilizando o histórico antigo do Raul.
+- No banco existem **3 conversas** do número `5562995085665`, todas já marcadas como `transferred`.
+- Em `supabase/functions/evolution-webhook/index.ts`, quando não existe conversa aberta, o código pega uma conversa antiga e ainda **reativa** `transferred/closed` para `active`.
+- Depois disso, `process-message` recebe o histórico completo e, como o lead já passou do total de perguntas, a regra programática dispara a transferência de novo.
+- Os logs confirmam isso: o resumo foi enviado várias vezes com `status=201`. Então o problema atual não é entrega, e sim **reuso indevido da conversa finalizada**.
 
-## Diagnóstico
+## O que vou implementar
+1. **Reset do Raul agora**
+   - Fazer um reset pontual para `5562995085665`.
+   - Em vez de apagar auditoria, vou **preservar as conversas antigas** e criar uma **nova conversa limpa** para esse contato no mesmo agente/device.
+   - Resultado: ele volta para o início do funil sem herdar respostas antigas.
 
-Os logs mostram claramente:
-- **Transfer**: `shouldTransfer=false` em TODAS as interações. A IA (DeepSeek) responde "Vou passar suas informações para nossa equipe..." mas **nunca inclui o token `TRANSFER_LEAD`** na resposta.
-- **Mídia**: A IA nunca inclui `SEND_MEDIA:xxx` — o PDF configurado na pergunta 3 nunca é enviado.
+2. **Correção permanente no webhook**
+   - Ajustar `supabase/functions/evolution-webhook/index.ts` para:
+     - priorizar `is_waiting_reply`
+     - depois `active/paused`
+     - e, se não existir conversa aberta, **criar nova conversa**
+   - Remover a lógica que reabre conversa `transferred` ou `closed`.
 
-**Causa raiz**: O DeepSeek ignora as instruções de incluir tokens especiais (`TRANSFER_LEAD`, `SEND_MEDIA:xxx`). Depender da IA para incluir tokens é frágil e pouco confiável.
+3. **Blindagem na transferência**
+   - Ajustar `supabase/functions/process-message/index.ts` para a transferência automática acontecer **só no momento em que o lead completa o funil**, e não em qualquer mensagem posterior.
+   - Trocar a lógica ampla (`>=`) por uma checagem de conclusão real da última etapa.
 
-## Solução: Detecção Programática
+4. **Validação**
+   - Testar com o Raul após o reset:
+     - o funil deve começar do zero
+     - as perguntas devem seguir normalmente
+     - o documento deve sair no ponto certo
+     - o resumo deve ser enviado **uma única vez**
 
-Em vez de depender do LLM incluir tokens, o backend vai **detectar automaticamente** quando transferir e quando enviar mídia.
-
-### `supabase/functions/process-message/index.ts`
-
-**1. Auto-detect transferência**
-
-Após receber a resposta da IA, contar quantas perguntas de qualificação foram respondidas pelo lead (mensagens com `role=user`). Se o `transfer_trigger=after_all_questions` e o número de respostas do lead >= número de perguntas, forçar a transferência mesmo sem o token `TRANSFER_LEAD`:
-
-```
-const totalQuestions = questions.length;
-const userMsgCount = history.filter(m => m.role === 'user').length;
-const offset = agent.type === 'prospecting' ? 1 : 0;
-const answeredQuestions = userMsgCount - offset;
-
-if (!shouldTransfer && transfer_trigger === 'after_all_questions' 
-    && answeredQuestions >= totalQuestions && transfer_number) {
-  shouldTransfer = true; // force transfer
-}
-```
-
-**2. Auto-detect envio de mídia**
-
-Após cada resposta da IA, verificar qual pergunta está sendo feita/respondida no fluxo. Se a pergunta atual tem mídia configurada e a condição é `always`, ou se o lead respondeu positivamente (`positive_response`/`explicit_yes`), enviar a mídia programaticamente sem depender do token `SEND_MEDIA`:
-
-- Mapear a posição atual na conversa (quantas perguntas já foram respondidas)
-- Verificar se a pergunta correspondente tem mídia configurada
-- Se `send_condition=always`: enviar imediatamente
-- Se `send_condition=positive_response`: analisar se a última resposta do lead é positiva (usar heurística simples: não contém palavras negativas)
-- Manter compatibilidade: se o token `SEND_MEDIA:xxx` estiver na resposta da IA, usar o fluxo existente
-
-**3. Manter token como fallback**
-
-O sistema existente de tokens continua funcionando. A detecção programática é um complemento, não substituição.
-
-## Arquivo impactado
-
-| Arquivo | Mudança |
-|---|---|
-| `supabase/functions/process-message/index.ts` | Detecção programática de transferência + envio automático de mídia |
-
+## Detalhes técnicos
+- **Sem mudança de schema**.
+- Haverá uma **correção de lógica** em 2 edge functions e um **reset pontual de dados** para esse contato.
+- **Arquivos impactados**:
+  - `supabase/functions/evolution-webhook/index.ts`
+  - `supabase/functions/process-message/index.ts`
+  - migração pontual para resetar o contato `5562995085665`
