@@ -10,7 +10,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { conversation_id, agent, history, contact_number, instance_name } = await req.json();
+    const { conversation_id, agent, history, contact_number, device_id } = await req.json();
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -23,16 +23,27 @@ serve(async (req) => {
       });
     }
 
-    // Fetch agent config for ban_triggers and transfer settings
+    // Fetch agent with config and device
     const { data: agentFull } = await supabase
       .from("agents")
-      .select("*, agent_config(*)")
+      .select("*, agent_config(*), devices(*)")
       .eq("id", agent.id)
       .single();
 
     const config = agentFull?.agent_config?.[0] || null;
+    const device = agentFull?.devices || null;
 
-    // --- ANTI-BAN: Check last user message for ban triggers ---
+    if (!device) {
+      return new Response(JSON.stringify({ error: "No device linked to agent" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const evoUrl = device.evolution_api_url;
+    const evoKey = device.evolution_api_key;
+    const evoInstance = device.instance_name;
+
+    // --- ANTI-BAN ---
     const lastUserMsg = [...history].reverse().find((m: any) => m.role === "user");
     if (lastUserMsg?.content && agentFull?.restrictions) {
       const banTriggers = ['para', 'stop', 'me tira', 'não quero', 'denuncia', 'spam', 'me bloqueia'];
@@ -52,13 +63,11 @@ serve(async (req) => {
           content: goodbyeMsg,
         });
 
-        if (agentFull) {
-          await fetch(`${agentFull.evolution_api_url}/message/sendText/${agentFull.evolution_instance}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", apikey: agentFull.evolution_api_key || "" },
-            body: JSON.stringify({ number: contact_number, text: goodbyeMsg }),
-          });
-        }
+        await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", apikey: evoKey || "" },
+          body: JSON.stringify({ number: contact_number, text: goodbyeMsg }),
+        });
 
         return new Response(JSON.stringify({ ok: true, action: "closed_ban" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -66,7 +75,7 @@ serve(async (req) => {
       }
     }
 
-    // --- Build system prompt with prospecting context injection ---
+    // --- Build system prompt ---
     let systemPrompt = agent.prompt_compiled;
 
     if (agentFull?.type === "prospecting") {
@@ -129,14 +138,12 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       content: aiResponse,
     });
 
-    // Send via Evolution API
-    if (agentFull) {
-      await fetch(`${agentFull.evolution_api_url}/message/sendText/${agentFull.evolution_instance}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: agentFull.evolution_api_key || "" },
-        body: JSON.stringify({ number: contact_number, text: aiResponse }),
-      });
-    }
+    // Send via Evolution API using device credentials
+    await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: evoKey || "" },
+      body: JSON.stringify({ number: contact_number, text: aiResponse }),
+    });
 
     // --- TRANSFER CHECK ---
     if (config?.qualification_questions && agentFull?.transfer_number) {
@@ -156,9 +163,9 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
         }).join("\n\n");
         summary = summary.replace("{{perguntas_respostas}}", qaPairs);
 
-        await fetch(`${agentFull.evolution_api_url}/message/sendText/${agentFull.evolution_instance}`, {
+        await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", apikey: agentFull.evolution_api_key || "" },
+          headers: { "Content-Type": "application/json", apikey: evoKey || "" },
           body: JSON.stringify({ number: agentFull.transfer_number, text: summary }),
         });
 

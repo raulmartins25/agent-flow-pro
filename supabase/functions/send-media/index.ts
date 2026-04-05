@@ -23,19 +23,21 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // Fetch agent with device
     const { data: agent } = await supabase
       .from("agents")
-      .select("evolution_api_url, evolution_api_key, evolution_instance")
+      .select("*, devices(*)")
       .eq("id", agent_id)
       .single();
 
-    if (!agent) {
-      return new Response(JSON.stringify({ error: "Agent not found" }), {
+    if (!agent || !agent.devices) {
+      return new Response(JSON.stringify({ error: "Agent or device not found" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Determine endpoint based on media type
+    const device = agent.devices;
+
     let endpoint = "sendMedia";
     const body: Record<string, any> = {
       number: contact_number,
@@ -52,12 +54,12 @@ serve(async (req) => {
     if (caption) body.caption = caption;
 
     const res = await fetch(
-      `${agent.evolution_api_url}/message/${endpoint}/${agent.evolution_instance}`,
+      `${device.evolution_api_url}/message/${endpoint}/${device.instance_name}`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          apikey: agent.evolution_api_key || "",
+          apikey: device.evolution_api_key || "",
         },
         body: JSON.stringify(body),
       }

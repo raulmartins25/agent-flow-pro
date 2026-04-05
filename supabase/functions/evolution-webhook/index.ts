@@ -29,23 +29,40 @@ serve(async (req) => {
         msg.message?.imageMessage?.caption || "";
       const instanceName = instance?.instanceName || "";
 
-      const { data: agent } = await supabase
-        .from("agents")
-        .select("id, user_id, status, type, prompt_compiled, llm_provider, llm_model, llm_api_key")
-        .eq("evolution_instance", instanceName)
-        .eq("status", "active")
+      // Find device by instance_name
+      const { data: device } = await supabase
+        .from("devices")
+        .select("*")
+        .eq("instance_name", instanceName)
+        .eq("status", "connected")
         .single();
 
-      if (!agent) {
-        return new Response(JSON.stringify({ ok: true, message: "No active agent" }), {
+      if (!device) {
+        return new Response(JSON.stringify({ ok: true, message: "No device found" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
+      // Find active agent linked to this device
+      const { data: agent } = await supabase
+        .from("agents")
+        .select("id, user_id, status, type, prompt_compiled, llm_provider, llm_model, llm_api_key, device_id")
+        .eq("device_id", device.id)
+        .eq("status", "active")
+        .single();
+
+      if (!agent) {
+        return new Response(JSON.stringify({ ok: true, message: "No active agent for device" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Find or create conversation scoped by agent_id + device_id
       let { data: conversation } = await supabase
         .from("conversations")
         .select("*")
         .eq("agent_id", agent.id)
+        .eq("device_id", device.id)
         .eq("contact_number", remoteJid)
         .in("status", ["active", "paused"])
         .single();
@@ -55,6 +72,8 @@ serve(async (req) => {
           .from("conversations")
           .insert({
             agent_id: agent.id,
+            device_id: device.id,
+            instance_name: instanceName,
             contact_number: remoteJid,
             contact_name: msg.pushName || remoteJid,
             status: "active",
@@ -80,13 +99,11 @@ serve(async (req) => {
 
       // --- PROSPECTING: Lead replied to blast (is_waiting_reply) ---
       if (!fromMe && conversation.is_waiting_reply) {
-        // Flip waiting flag
         await supabase
           .from("conversations")
           .update({ is_waiting_reply: false })
           .eq("id", conversation.id);
 
-        // Save lead's message
         await supabase.from("messages").insert({
           conversation_id: conversation.id,
           role: "user",
@@ -95,13 +112,11 @@ serve(async (req) => {
           media_type: mediaType,
         });
 
-        // Update last_message_at
         await supabase
           .from("conversations")
           .update({ last_message_at: new Date().toISOString() })
           .eq("id", conversation.id);
 
-        // Get history for AI
         const { data: history } = await supabase
           .from("messages")
           .select("role, content")
@@ -109,7 +124,6 @@ serve(async (req) => {
           .order("created_at", { ascending: true })
           .limit(50);
 
-        // Trigger AI
         const processUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-message`;
         await fetch(processUrl, {
           method: "POST",
@@ -123,6 +137,7 @@ serve(async (req) => {
             history: history || [],
             contact_number: remoteJid,
             instance_name: instanceName,
+            device_id: device.id,
           }),
         });
 
@@ -141,20 +156,17 @@ serve(async (req) => {
         media_type: mediaType,
       });
 
-      // Update last_message_at
       await supabase
         .from("conversations")
         .update({ last_message_at: new Date().toISOString() })
         .eq("id", conversation.id);
 
-      // Skip AI if agent_paused or fromMe
       if (conversation.agent_paused || fromMe) {
         return new Response(JSON.stringify({ ok: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      // Get conversation history
       const { data: history } = await supabase
         .from("messages")
         .select("role, content")
@@ -162,7 +174,6 @@ serve(async (req) => {
         .order("created_at", { ascending: true })
         .limit(50);
 
-      // Call process-message
       const processUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-message`;
       await fetch(processUrl, {
         method: "POST",
@@ -176,6 +187,7 @@ serve(async (req) => {
           history: history || [],
           contact_number: remoteJid,
           instance_name: instanceName,
+          device_id: device.id,
         }),
       });
     }
@@ -185,7 +197,7 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("Webhook error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
