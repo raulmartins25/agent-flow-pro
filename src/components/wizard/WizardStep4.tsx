@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useAgentStore } from '@/stores/agentStore';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -55,6 +55,9 @@ export function WizardStep4() {
   const questions = wizardData.qualification_questions;
   const [uploading, setUploading] = useState<Record<string, number>>({});
   const [openPanels, setOpenPanels] = useState<Record<string, boolean>>({});
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const dragCounter = useRef(0);
 
   const addQuestion = () => {
     updateWizardData({
@@ -83,6 +86,62 @@ export function WizardStep4() {
     });
   };
 
+  const reorderQuestions = useCallback((fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx) return;
+    const updated = [...questions];
+    const [moved] = updated.splice(fromIdx, 1);
+    updated.splice(toIdx, 0, moved);
+    updateWizardData({ qualification_questions: updated });
+  }, [questions, updateWizardData]);
+
+  const handleDragStart = (e: React.DragEvent, idx: number) => {
+    setDraggedIdx(idx);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(idx));
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.5';
+    }
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '1';
+    }
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+    dragCounter.current = 0;
+  };
+
+  const handleDragEnter = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    dragCounter.current++;
+    setDragOverIdx(idx);
+  };
+
+  const handleDragLeave = () => {
+    dragCounter.current--;
+    if (dragCounter.current <= 0) {
+      setDragOverIdx(null);
+      dragCounter.current = 0;
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, toIdx: number) => {
+    e.preventDefault();
+    dragCounter.current = 0;
+    const fromIdx = Number(e.dataTransfer.getData('text/plain'));
+    if (!isNaN(fromIdx)) {
+      reorderQuestions(fromIdx, toIdx);
+    }
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+  };
+
   const handleUpload = async (questionId: string, file: File) => {
     const fileType = getFileType(file);
     const safeName = sanitizeFileName(file.name);
@@ -90,7 +149,6 @@ export function WizardStep4() {
 
     setUploading((prev) => ({ ...prev, [questionId]: 0 }));
 
-    // Simulate progress (Supabase SDK doesn't provide progress natively)
     const progressInterval = setInterval(() => {
       setUploading((prev) => {
         const current = prev[questionId] ?? 0;
@@ -153,10 +211,24 @@ export function WizardStep4() {
       ) : (
         <div className="space-y-3">
           {questions.map((q, i) => (
-            <Card key={q.id}>
+            <Card
+              key={q.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, i)}
+              onDragEnd={handleDragEnd}
+              onDragEnter={(e) => handleDragEnter(e, i)}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, i)}
+              className={`transition-all duration-150 ${
+                dragOverIdx === i && draggedIdx !== i
+                  ? 'border-primary ring-1 ring-primary/30'
+                  : ''
+              } ${draggedIdx === i ? 'opacity-50' : ''}`}
+            >
               <CardContent className="space-y-3 p-3">
                 <div className="flex items-center gap-3">
-                  <GripVertical className="h-4 w-4 text-muted-foreground shrink-0 cursor-grab" />
+                  <GripVertical className="h-4 w-4 text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing" />
                   <span className="text-sm font-medium text-muted-foreground shrink-0">{i + 1}.</span>
                   <Input
                     value={q.question}
