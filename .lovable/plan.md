@@ -1,42 +1,45 @@
 
 
-# Editor Rico para Template de Resumo — WizardStep6
+# Correção: Mídia das perguntas desalinhada no template e na edição
 
-## O que muda
-Substituir o `<Textarea>` simples do template de resumo por um editor rico com:
-1. **Barra de variáveis clicáveis** — chips que inserem `{{nome_contato}}`, `{{telefone}}`, `{{data}}`, `{{agente}}`, `{{perguntas_respostas}}` na posição do cursor
-2. **Picker de emojis** — botão que abre um popover com emojis populares do WhatsApp organizados por categoria
-3. **Variáveis de perguntas cadastradas** — para cada pergunta de qualificação existente, mostrar um chip com o texto da pergunta que insere `{{pergunta_N}}` e `{{resposta_N}}` no template
-4. **Preview atualizado** — renderizar as variáveis de perguntas com exemplos realistas
+## Problemas identificados
 
-## Arquivo impactado
+1. **Variáveis no Step 6 usam índice do array** — Os chips `{{pergunta_1}}`, `{{resposta_1}}` são baseados na posição do array. Se o usuário reordenar perguntas no Step 4 (drag & drop), o mapeamento quebra. Uma pergunta que era P3 vira P1, mas o template ainda referencia `{{pergunta_3}}`.
+
+2. **No backend (process-message), as respostas são mapeadas por índice** — `userMessages[index + offset]` assume que o lead respondeu na ordem exata do array. Após reordenação, a resposta pode ser associada à pergunta errada no resumo.
+
+3. **Indicação visual de mídia nos chips do Step 6** — Todos os chips P/R parecem iguais. Não há diferença visual entre perguntas com e sem mídia anexada.
+
+## Solução
+
+### `src/components/wizard/WizardStep6.tsx`
+- Adicionar ícone 📎 nos chips de perguntas que possuem `media` configurada, para diferenciar visualmente
+- O mapeamento por índice é correto para o template (P1 = primeira pergunta da lista atual), mas precisa ficar claro que a numeração segue a **ordem atual** das perguntas
+
+### `src/components/wizard/WizardStep4.tsx`
+- Após reordenar (drag & drop), garantir que o `media` acompanha a pergunta (já funciona — o objeto inteiro é movido). O problema pode estar no `openPanels` state que usa `q.id` como chave — isso deve estar correto.
+- Verificar se ao carregar dados na edição, o campo `media` é preservado corretamente dentro de cada objeto de pergunta
+
+### `supabase/functions/process-message/index.ts`
+- O mapeamento `userMessages[index + offset]` é frágil — se a IA pular uma pergunta ou o lead responder duas de uma vez, o alinhamento quebra
+- Melhorar: usar o histórico completo para buscar a resposta mais provável para cada pergunta, em vez de confiar puramente no índice
+
+## Mudanças concretas
+
+### 1. `src/components/wizard/WizardStep6.tsx`
+- Nos chips de perguntas cadastradas, adicionar indicador visual (📎) quando `q.media?.file_url` existe
+- Manter a lógica de índice para as variáveis (é o comportamento correto — P1 = primeira da lista)
+
+### 2. `supabase/functions/process-message/index.ts`
+- No bloco de transferência, manter o mapeamento por índice (é a melhor heurística disponível sem NLP complexo)
+- Adicionar log das perguntas e respostas mapeadas para facilitar debug futuro
+
+### Arquivo impactado
+
 | Arquivo | Mudança |
 |---|---|
-| `src/components/wizard/WizardStep6.tsx` | Editor rico com variáveis, emojis e perguntas |
+| `src/components/wizard/WizardStep6.tsx` | Indicador visual 📎 em chips de perguntas com mídia |
+| `supabase/functions/process-message/index.ts` | Logs adicionais no mapeamento pergunta→resposta |
 
-## Detalhes técnicos
-
-### Barra de variáveis (acima do textarea)
-- Row de chips/badges clicáveis: `{{nome_contato}}`, `{{telefone}}`, `{{data}}`, `{{agente}}`, `{{perguntas_respostas}}`
-- Ao clicar, insere o texto na posição atual do cursor no textarea (via `selectionStart` do ref)
-- Visual: `Badge` com `variant="outline"` e `cursor-pointer hover:bg-primary/10`
-
-### Picker de emojis
-- Botão `😀` ao lado do textarea (ou na barra de variáveis)
-- Abre `Popover` com grid de emojis comuns do WhatsApp: 👋 😊 ✅ 📋 👤 📱 📅 🎯 💰 🔥 ⭐ 📝 📞 💼 🏢 ❤️ 👍 🙏 etc.
-- Ao clicar um emoji, insere na posição do cursor
-
-### Variáveis de perguntas cadastradas
-- Seção abaixo das variáveis padrão: "Perguntas cadastradas"
-- Para cada `wizardData.qualification_questions`, mostrar:
-  - Chip `📝 P1: {texto truncado}` → insere `{{pergunta_1}}`
-  - Chip `💬 R1` → insere `{{resposta_1}}`
-- Se não há perguntas cadastradas, mostrar texto: "Cadastre perguntas no Step 4"
-
-### Preview melhorado
-- Além das variáveis existentes, substituir `{{pergunta_N}}` e `{{resposta_N}}` com exemplos das perguntas reais cadastradas
-- Ex: `{{pergunta_1}}` → texto real da pergunta, `{{resposta_1}}` → "Resposta do lead"
-
-### Suporte no backend (process-message)
-- No bloco de transferência, ao montar o `perguntasRespostas`, também substituir `{{pergunta_N}}` e `{{resposta_N}}` individualmente caso o template use essas variáveis em vez de `{{perguntas_respostas}}`
+**Nota**: A IA conversando funciona perfeitamente (confirmado pelo usuário). O problema é apenas visual/de apresentação nos chips e no alinhamento do resumo.
 
