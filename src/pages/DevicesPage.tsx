@@ -331,6 +331,22 @@ export default function DevicesPage() {
                     <p><strong>Status:</strong> {webhookInfo.is_correct ? '✅ Configurado corretamente' : '❌ Incorreto ou ausente'}</p>
                     <p className="truncate"><strong>URL atual:</strong> {webhookInfo.current_url || 'Nenhuma'}</p>
                     {!webhookInfo.is_correct && <p className="truncate"><strong>Esperado:</strong> {webhookInfo.expected_url}</p>}
+                    {!webhookInfo.is_correct && (
+                      <Button variant="outline" size="sm" className="mt-2 border-yellow-500/50 text-yellow-500 hover:bg-yellow-500/10" onClick={async () => {
+                        try {
+                          toast.info('Corrigindo webhook...');
+                          await supabase.functions.invoke('device-connect', { body: { device_id: manageDevice.id } });
+                          const res = await supabase.functions.invoke('check-webhook', { body: { device_id: manageDevice.id } });
+                          if (res.data) {
+                            setWebhookInfo(res.data);
+                            if (res.data.is_correct) toast.success('Webhook corrigido!');
+                            else toast.error('Webhook ainda incorreto');
+                          }
+                        } catch { toast.error('Erro ao corrigir webhook'); }
+                      }}>
+                        <RefreshCw className="mr-1 h-3 w-3" />Corrigir webhook
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
