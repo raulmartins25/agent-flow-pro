@@ -1,64 +1,90 @@
 
-Objetivo: fazer as conversas entrarem no sistema e aparecerem no Inbox sem mexer em partes não relacionadas.
 
-Diagnóstico
-- O problema principal não é mais o webhook configurado: ele já está correto.
-- O webhook está recebendo eventos, mas `body.instance` vem como string (`"admin_starter_gvcm"`). O código atual lê `instance?.instanceName`, então `instanceName` fica vazio e o device nunca é encontrado.
-- Além disso, o projeto está sem dados operacionais no fluxo do inbox: hoje há 1 device e 0 agents / 0 conversations / 0 messages. Mesmo após corrigir o parser do webhook, sem agente ativo vinculado ao device nada será criado.
-- A query do Inbox também está simplificada demais e o realtime atual injeta registros sem hidratar os joins.
+# Mídia Condicional nas Perguntas de Qualificação (Step 4)
 
-Plano de correção
+## Visão Geral
+Adicionar suporte a upload de mídia em cada pergunta de qualificação, com mensagem de oferta, upload para Storage, e envio condicional via Evolution API quando a LLM emitir `SEND_MEDIA:{id}`.
 
-1. Corrigir o parser do webhook
-- Arquivo: `supabase/functions/evolution-webhook/index.ts`
-- Ler `instance` nos dois formatos:
-  - string
-  - objeto com `instanceName`
-- Normalizar `instanceName` e `remoteJid`.
-- Logar claramente: evento, instanceName resolvido, device encontrado, agent encontrado.
-- Ignorar `fromMe === true` antes de processar.
-- Manter o isolamento por `device_id + agent_id + contact_number`.
+---
 
-2. Garantir agente operacional
-- Arquivo: `src/pages/AgentWizard.tsx`
-- Ajustar a criação para que o agente já nasça `active` quando houver dispositivo válido e nenhum outro agente ativo nele.
-- Continuar bloqueando mais de 1 agente ativo por dispositivo.
+## 1. Migração SQL — Bucket `agent-media`
 
-3. Dar controle visual do status do agente
-- Arquivo: `src/pages/Agents.tsx`
-- Adicionar ação simples de ativar/desativar agente.
-- Isso evita o cenário em que o device está conectado, mas o agente fica “invisivelmente inativo”.
+```sql
+INSERT INTO storage.buckets (id, name, public) VALUES ('agent-media', 'agent-media', true);
 
-4. Fortalecer a query do Inbox
-- Arquivo: `src/pages/InboxPage.tsx`
-- Trocar a busca por query com join em `agents!inner` e `devices`, filtrando por `agents.user_id = user.id`.
-- Executar a carga só quando o usuário estiver pronto.
-- Manter `deviceFilter = 'all'` por padrão.
+CREATE POLICY "Public read agent-media" ON storage.objects FOR SELECT USING (bucket_id = 'agent-media');
+CREATE POLICY "Authenticated upload agent-media" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'agent-media');
+CREATE POLICY "Authenticated delete agent-media" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'agent-media');
+```
 
-5. Ajustar o realtime do Inbox
-- Arquivo: `src/pages/InboxPage.tsx`
-- No `INSERT/UPDATE` de conversations, refazer a query completa (ou hidratar a linha) em vez de inserir `payload.new` cru.
-- Assim os dados continuam vindo com `agents/devices` e a lista não fica inconsistente.
+## 2. `src/stores/agentStore.ts` — Atualizar tipo
 
-O que não precisa mudar
-- Sem migração SQL.
-- Sem ajuste de RLS neste momento.
-- Sem mexer em `device-connect`, `device-status` ou `check-webhook`, porque a URL do webhook já está certa.
+Substituir os campos `followup_media_url?` e `followup_media_type?` pela nova estrutura `media?`:
 
-Arquivos impactados
-- `supabase/functions/evolution-webhook/index.ts`
-- `src/pages/AgentWizard.tsx`
-- `src/pages/Agents.tsx`
-- `src/pages/InboxPage.tsx`
+```typescript
+qualification_questions: Array<{
+  id: string;
+  question: string;
+  media?: {
+    offer_message: string;
+    file_url: string;
+    file_name: string;
+    file_type: 'image' | 'audio' | 'document' | 'video';
+    send_condition: 'positive_response' | 'always' | 'explicit_yes';
+  };
+}>;
+```
 
-Resultado esperado
-- Mensagens recebidas passam a encontrar o device correto.
-- Com agente ativo no device, o sistema cria/atualiza conversations e messages.
-- O Inbox passa a listar as conversas do usuário corretamente.
-- Cada número continua isolado no próprio dispositivo.
+## 3. `src/components/wizard/WizardStep4.tsx` — UI completa
 
-Validação final
-- Criar ou ativar um agente no device “Eva - 3412”.
-- Enviar uma mensagem para esse número.
-- Confirmar no log do webhook: `instanceName` preenchido, device encontrado, agent encontrado.
-- Confirmar no `/inbox`: a conversa aparece sem precisar selecionar filtro específico.
+Cada pergunta ganha um botão colapsável "+ Anexar mídia" usando `Collapsible`. Ao expandir:
+
+- **Textarea** "Mensagem de oferta" — placeholder: "Ex: Posso te enviar nosso portfólio para você ver como trabalhamos?"
+- **Upload de arquivo** — aceita `.pdf,.mp4,.mp3,.ogg,.jpg,.png,.jpeg`. Faz upload via `supabase.storage.from('agent-media').upload(...)`. Mostra barra de progresso. Preview por tipo de arquivo (thumbnail, ícone PDF, ícone mic, ícone play). Botão X para remover.
+- **Select** "Quando enviar?" — 3 opções: positive_response (default), always, explicit_yes.
+
+Path no storage: `{question_id}/{filename}` (sem agent_id pois o agente ainda não existe no momento da criação).
+
+## 4. `src/lib/compilePrompt.ts` — Instruções de mídia no prompt
+
+Atualizar o tipo `AgentData.qualification_questions` para incluir `media?`. Na formatação das perguntas, para cada uma que tiver `media`:
+
+```
+Pergunta N: "pergunta"
+  ↳ Após esta pergunta, se o lead [condição], faça a oferta: "offer_message"
+  Se aceitar: inclua exatamente o texto SEND_MEDIA:{question_id} na sua resposta.
+  Se recusar: continue normalmente. NUNCA envie mídia sem perguntar (exceto 'always').
+```
+
+Mapeamento de condição:
+- `positive_response` → "demonstrar interesse ou responder positivamente"
+- `always` → "(envie automaticamente, sem perguntar)"
+- `explicit_yes` → "responder explicitamente com 'sim' ou 'pode'"
+
+## 5. `supabase/functions/process-message/index.ts` — Detectar e enviar mídia
+
+Após gerar `aiResponse`, antes de salvar/enviar:
+
+1. Regex para encontrar `SEND_MEDIA:([a-f0-9-]+)` no texto
+2. Para cada match: buscar a pergunta no `config.qualification_questions` pelo ID
+3. Determinar endpoint Evolution por `file_type`:
+   - `image` → `sendMedia` com `mediatype: "image"`
+   - `audio` → `sendWhatsAppAudio` (PTT)
+   - `document` → `sendMedia` com `mediatype: "document"`
+   - `video` → `sendMedia` com `mediatype: "video"`
+4. Enviar via Evolution API
+5. Salvar mensagem de mídia em `messages` com `media_url` e `media_type`
+6. Remover tokens `SEND_MEDIA:...` do texto antes de salvar/enviar o texto
+
+---
+
+## Arquivos impactados
+
+| Arquivo | Ação |
+|---|---|
+| Migração SQL | Bucket `agent-media` + políticas |
+| `src/stores/agentStore.ts` | Tipo `media?` nas questions |
+| `src/components/wizard/WizardStep4.tsx` | UI upload + collapsible |
+| `src/lib/compilePrompt.ts` | Instruções SEND_MEDIA no prompt |
+| `supabase/functions/process-message/index.ts` | Detectar token + enviar mídia |
+
