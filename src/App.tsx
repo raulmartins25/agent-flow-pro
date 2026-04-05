@@ -19,6 +19,7 @@ import SimulatorPage from "@/pages/SimulatorPage";
 import PublicSimulatorPage from "@/pages/PublicSimulatorPage";
 import SettingsPage from "@/pages/SettingsPage";
 import ChipWarmupPage from "@/pages/ChipWarmupPage";
+import DevicesPage from "@/pages/DevicesPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,6 +38,7 @@ const App = () => (
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/devices" element={<DevicesPage />} />
               <Route path="/agents" element={<Agents />} />
               <Route path="/agents/new" element={<AgentWizard />} />
               <Route path="/agents/:id/simulator" element={<SimulatorPage />} />

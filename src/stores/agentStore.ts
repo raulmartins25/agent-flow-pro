@@ -4,9 +4,7 @@ interface AgentWizardData {
   // Step 1
   name: string;
   type: 'receptive' | 'prospecting';
-  evolution_instance: string;
-  evolution_api_url: string;
-  evolution_api_key: string;
+  device_id: string;
   // Step 2
   agent_persona_name: string;
   company_name: string;
@@ -50,9 +48,7 @@ interface AgentStore {
 const initialWizardData: AgentWizardData = {
   name: '',
   type: 'receptive',
-  evolution_instance: '',
-  evolution_api_url: '',
-  evolution_api_key: '',
+  device_id: '',
   agent_persona_name: '',
   company_name: '',
   segment: '',

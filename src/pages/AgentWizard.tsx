@@ -32,9 +32,7 @@ export default function AgentWizard() {
     switch (currentStep) {
       case 0:
         if (!wizardData.name.trim()) return 'Nome do agente é obrigatório';
-        if (!wizardData.evolution_api_url.trim()) return 'URL da Evolution API é obrigatória';
-        if (!wizardData.evolution_api_key.trim()) return 'API Key da Evolution é obrigatória';
-        if (!wizardData.evolution_instance.trim()) return 'Nome da instância é obrigatório';
+        if (!wizardData.device_id) return 'Selecione um dispositivo WhatsApp';
         break;
       case 1:
         if (!wizardData.agent_persona_name.trim()) return 'Nome do agente persona é obrigatório';
@@ -63,6 +61,18 @@ export default function AgentWizard() {
     const error = validateStep();
     if (error) { toast.error(error); return; }
 
+    // Check if device already has an active agent
+    const { data: existingAgents } = await supabase
+      .from('agents')
+      .select('id, name')
+      .eq('device_id', wizardData.device_id)
+      .eq('status', 'active');
+
+    if (existingAgents && existingAgents.length > 0) {
+      toast.error(`Este dispositivo já tem um agente ativo: ${existingAgents[0].name}`);
+      return;
+    }
+
     setSaving(true);
     try {
       const prompt = compileAgentPrompt(wizardData);
@@ -74,9 +84,7 @@ export default function AgentWizard() {
           name: wizardData.name,
           type: wizardData.type,
           status: 'inactive',
-          evolution_api_url: wizardData.evolution_api_url,
-          evolution_api_key: wizardData.evolution_api_key,
-          evolution_instance: wizardData.evolution_instance,
+          device_id: wizardData.device_id,
           llm_provider: wizardData.llm_provider,
           llm_model: wizardData.llm_model,
           llm_api_key: wizardData.llm_api_key || null,
