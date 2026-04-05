@@ -85,11 +85,21 @@ ${data.ai_restrictions || 'Nenhuma restrição específica.'}`;
 
   let messageSection: string;
 
+  const progressBlock = `CONTROLE DE PROGRESSO — OBRIGATÓRIO:
+Antes de fazer qualquer pergunta, verifique o histórico da conversa.
+Se a pergunta JÁ FOI FEITA e o lead JÁ RESPONDEU, marque como concluída e passe para a próxima não respondida.
+NUNCA repita uma pergunta que já foi respondida, mesmo após tratar uma objeção.
+Após resolver uma objeção, retome EXATAMENTE de onde parou — na próxima pergunta ainda não respondida.
+Ao receber cada resposta, internamente registre: "Pergunta N: RESPONDIDA".
+Sempre que for fazer uma pergunta, confirme que ela ainda não foi respondida.`;
+
   if (data.type === 'receptive') {
     messageSection = `FLUXO DE ATENDIMENTO:
 Mensagem de boas-vindas: "${data.welcome_message}"
 
-Após a saudação, conduza o lead pelas seguintes perguntas de qualificação, uma por vez:
+${progressBlock}
+
+Perguntas de qualificação (uma por vez, aguarde resposta antes da próxima):
 ${questionsFormatted}`;
   } else {
     messageSection = `CONTEXTO DE PROSPECÇÃO:
@@ -104,6 +114,8 @@ REGRAS CRÍTICAS:
 - Se respondeu negativamente: trate como objeção inicial usando os handlers configurados
 - NUNCA reenvie ou repita a mensagem de disparo
 - NUNCA diga "como mencionei antes" ou similar
+
+${progressBlock}
 
 Perguntas de qualificação (uma por vez, aguarde resposta antes da próxima):
 ${questionsFormatted}`;
@@ -120,9 +132,16 @@ REGRAS DE FOLLOWUP:
 - Se o lead não responder após a mensagem ${data.followup_start_message}, inicie followup.
 - Máximo de ${data.followup_max} tentativas, com intervalo de ${intervalHours}.
 
-ENCERRAMENTO E TRANSFERÊNCIA:
-Quando ${data.transfer_trigger === 'after_all_questions' ? 'todas as perguntas forem respondidas' : 'a pergunta específica for respondida'}, envie ao número ${data.transfer_number || '[não configurado]'} o seguinte resumo:
-${data.transfer_summary_template}
+TRANSFERÊNCIA — PRIORIDADE MÁXIMA:
+Quando ${data.transfer_trigger === 'after_all_questions' ? 'todas as perguntas forem respondidas' : 'a pergunta específica for respondida'}, você DEVE:
+1. Enviar uma mensagem de encerramento calorosa e breve ao lead
+   (ex: "Perfeito! Vou passar suas informações para nossa equipe, que entrará em contato em breve. Obrigada pelo seu tempo! 😊")
+2. Incluir OBRIGATORIAMENTE na sua resposta o token exato: TRANSFER_LEAD
+3. PARAR completamente — não fazer mais nenhuma pergunta após emitir TRANSFER_LEAD
+4. Se o lead continuar respondendo após a transferência, responda apenas:
+   "Nossa equipe já tem suas informações e entrará em contato em breve!"
+
+IMPORTANTE: TRANSFER_LEAD deve aparecer em toda resposta de encerramento, sem exceção. Não é opcional.
 
 PROTEÇÃO ANTI-BAN:
 Se o lead demonstrar irritação, usar as palavras-chave de encerramento (${data.ban_triggers.join(', ')}), ou qualquer sinal de que não quer receber mensagens:
