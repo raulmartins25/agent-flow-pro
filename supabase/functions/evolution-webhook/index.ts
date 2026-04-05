@@ -93,32 +93,38 @@ serve(async (req) => {
       }
 
       // --- RANKED conversation lookup ---
-      // Get all conversations for this agent+device+canonical phone
-      const { data: allConvs } = await supabase
+      // Only look for OPEN conversations (is_waiting_reply, active, paused)
+      // Do NOT reuse transferred or closed conversations
+      const { data: openConvs } = await supabase
         .from("conversations")
         .select("*")
         .eq("agent_id", agent.id)
         .eq("device_id", device.id)
         .eq("contact_number", remoteJid)
+        .in("status", ["active", "paused"])
         .order("created_at", { ascending: false });
 
-      let conversation = null;
+      const { data: waitingConvs } = await supabase
+        .from("conversations")
+        .select("*")
+        .eq("agent_id", agent.id)
+        .eq("device_id", device.id)
+        .eq("contact_number", remoteJid)
+        .eq("is_waiting_reply", true)
+        .order("created_at", { ascending: false })
+        .limit(1);
 
+      let conversation = null;
       const contactName = msg.pushName || rawJid.split("@")[0] || "Contato";
 
-      if (allConvs && allConvs.length > 0) {
-        // Prioritize: is_waiting_reply first, then active/paused, then any
-        const waitingConv = allConvs.find((c: any) => c.is_waiting_reply);
-        const activeConv = allConvs.find((c: any) => c.status === "active" || c.status === "paused");
-        conversation = waitingConv || activeConv || allConvs[0];
-        
-        // Reactivate if transferred/closed
+      // Priority: is_waiting_reply first, then active/paused
+      const waitingConv = waitingConvs?.[0] || null;
+      const activeConv = openConvs?.[0] || null;
+      conversation = waitingConv || activeConv;
+
+      if (conversation) {
+        // Update contact_name if needed
         const updates: any = {};
-        if (conversation.status === "transferred" || conversation.status === "closed") {
-          updates.status = "active";
-          conversation.status = "active";
-        }
-        // Update contact_name if current is generic or empty
         if (msg.pushName && (!conversation.contact_name || conversation.contact_name === conversation.contact_number)) {
           updates.contact_name = contactName;
           conversation.contact_name = contactName;
@@ -126,9 +132,10 @@ serve(async (req) => {
         if (Object.keys(updates).length > 0) {
           await supabase.from("conversations").update(updates).eq("id", conversation.id);
         }
-        console.log("Using existing conversation:", conversation.id, "status:", conversation.status, "contact_name:", conversation.contact_name);
+        console.log("Using existing conversation:", conversation.id, "status:", conversation.status);
       }
 
+      // If no open conversation found, create a brand new one
       if (!conversation) {
         const { data: newConv } = await supabase
           .from("conversations")
@@ -143,7 +150,7 @@ serve(async (req) => {
           .select()
           .single();
         conversation = newConv;
-        console.log("Created new conversation:", newConv?.id);
+        console.log("Created NEW conversation (no open ones found):", newConv?.id);
       }
 
       if (!conversation) {
@@ -186,6 +193,7 @@ serve(async (req) => {
           .select("role, content")
           .eq("conversation_id", conversation.id)
           .not("content", "is", null)
+          .neq("content", "")
           .order("created_at", { ascending: true })
           .limit(50);
 
@@ -239,6 +247,7 @@ serve(async (req) => {
         .select("role, content")
         .eq("conversation_id", conversation.id)
         .not("content", "is", null)
+        .neq("content", "")
         .order("created_at", { ascending: true })
         .limit(50);
 
