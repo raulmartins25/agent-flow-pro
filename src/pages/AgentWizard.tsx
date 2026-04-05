@@ -1,4 +1,5 @@
 import { useNavigate, useParams } from 'react-router-dom';
+import { Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAgentStore } from '@/stores/agentStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -254,16 +255,44 @@ export default function AgentWizard() {
       </div>
 
       {/* Stepper */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center w-full">
         {steps.map((step, i) => (
-          <button key={i} onClick={() => i < currentStep && setCurrentStep(i)}
-            className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-full transition-colors ${
-              i === currentStep ? 'bg-primary text-primary-foreground' :
-              i < currentStep ? 'bg-primary/20 text-primary cursor-pointer hover:bg-primary/30' :
-              'bg-muted text-muted-foreground'}`}>
-            <span className="font-semibold">{i + 1}</span>
-            <span className="hidden md:inline">{step.title}</span>
-          </button>
+          <div key={i} className="flex items-center flex-1 last:flex-none">
+            <button
+              onClick={() => setCurrentStep(i)}
+              className="flex flex-col items-center gap-1.5 group cursor-pointer"
+            >
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
+                  i === currentStep
+                    ? 'bg-primary text-primary-foreground ring-4 ring-primary/20'
+                    : i < currentStep
+                    ? 'bg-primary/20 text-primary group-hover:bg-primary/30'
+                    : 'bg-muted text-muted-foreground group-hover:bg-muted/80'
+                }`}
+              >
+                {i < currentStep ? <Check className="w-4 h-4" /> : i + 1}
+              </div>
+              <span
+                className={`hidden md:block text-xs text-center truncate max-w-[80px] transition-colors ${
+                  i === currentStep
+                    ? 'text-primary font-medium'
+                    : i < currentStep
+                    ? 'text-primary/70'
+                    : 'text-muted-foreground'
+                }`}
+              >
+                {step.title}
+              </span>
+            </button>
+            {i < steps.length - 1 && (
+              <div
+                className={`flex-1 h-0.5 mx-2 rounded-full transition-colors ${
+                  i < currentStep ? 'bg-primary/40' : 'bg-muted'
+                }`}
+              />
+            )}
+          </div>
         ))}
       </div>
 
