@@ -15,6 +15,10 @@ serve(async (req) => {
     const data = body.data;
     const instance = body.instance;
 
+    console.log("=== WEBHOOK RECEBIDO ===");
+    console.log("Event:", event, "Instance:", instance?.instanceName || "unknown");
+    console.log("Body:", JSON.stringify(body).substring(0, 500));
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -24,10 +28,17 @@ serve(async (req) => {
       const msg = data;
       const remoteJid = msg.key?.remoteJid?.replace("@s.whatsapp.net", "") || "";
       const fromMe = msg.key?.fromMe || false;
+
+      if (fromMe) {
+        console.log("Ignorando mensagem própria (fromMe=true)");
+      }
+
       const content = msg.message?.conversation ||
         msg.message?.extendedTextMessage?.text ||
         msg.message?.imageMessage?.caption || "";
       const instanceName = instance?.instanceName || "";
+
+      console.log("Remote:", remoteJid, "FromMe:", fromMe, "Content:", content?.substring(0, 100));
 
       // Find device by instance_name
       const { data: device } = await supabase
@@ -38,6 +49,7 @@ serve(async (req) => {
         .single();
 
       if (!device) {
+        console.log("No device found for instance:", instanceName);
         return new Response(JSON.stringify({ ok: true, message: "No device found" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -52,6 +64,7 @@ serve(async (req) => {
         .single();
 
       if (!agent) {
+        console.log("No active agent for device:", device.id);
         return new Response(JSON.stringify({ ok: true, message: "No active agent for device" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -81,6 +94,7 @@ serve(async (req) => {
           .select()
           .single();
         conversation = newConv;
+        console.log("Created new conversation:", newConv?.id);
       }
 
       if (!conversation) {
@@ -99,6 +113,7 @@ serve(async (req) => {
 
       // --- PROSPECTING: Lead replied to blast (is_waiting_reply) ---
       if (!fromMe && conversation.is_waiting_reply) {
+        console.log("Lead replied to blast, activating agent for conversation:", conversation.id);
         await supabase
           .from("conversations")
           .update({ is_waiting_reply: false })
@@ -162,6 +177,7 @@ serve(async (req) => {
         .eq("id", conversation.id);
 
       if (conversation.agent_paused || fromMe) {
+        console.log("Skipping process-message: paused=", conversation.agent_paused, "fromMe=", fromMe);
         return new Response(JSON.stringify({ ok: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
