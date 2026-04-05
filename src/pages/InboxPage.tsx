@@ -4,19 +4,22 @@ import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, Pause, Play, Send, Paperclip, MessageSquare, Download, X } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Search, Pause, Play, Send, MessageSquare, Download, X, Smartphone } from 'lucide-react';
 import { toast } from 'sonner';
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 type Conversation = {
   id: string;
   agent_id: string;
+  device_id: string | null;
   contact_number: string;
   contact_name: string | null;
   status: string;
   agent_paused: boolean;
   last_message_at: string | null;
   agents?: { name: string } | null;
+  devices?: { name: string } | null;
 };
 
 type Message = {
@@ -29,6 +32,8 @@ type Message = {
   created_at: string;
 };
 
+type Device = { id: string; name: string };
+
 export default function InboxPage() {
   const { conversationId } = useParams();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -36,24 +41,32 @@ export default function InboxPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'active' | 'paused' | 'transferred'>('all');
+  const [deviceFilter, setDeviceFilter] = useState<string>('all');
+  const [devices, setDevices] = useState<Device[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Load devices for filter
+  useEffect(() => {
+    supabase.from('devices').select('id, name').then(({ data }) => {
+      setDevices((data as Device[]) ?? []);
+    });
+  }, []);
+
   // Load conversations
   useEffect(() => {
-    const fetch = async () => {
+    const fetchConvs = async () => {
       const { data } = await supabase
         .from('conversations')
-        .select('*, agents(name)')
+        .select('*, agents(name), devices(name)')
         .order('last_message_at', { ascending: false });
       setConversations((data as any[]) ?? []);
       setLoading(false);
     };
-    fetch();
+    fetchConvs();
 
-    // Realtime subscription for conversations
     const channel = supabase
       .channel('conversations-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' },
@@ -86,7 +99,6 @@ export default function InboxPage() {
     };
     fetchMsgs();
 
-    // Realtime for messages
     const channel = supabase
       .channel(`messages-${activeConv.id}`)
       .on('postgres_changes', {
@@ -100,12 +112,10 @@ export default function InboxPage() {
     return () => { supabase.removeChannel(channel); };
   }, [activeConv?.id]);
 
-  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Select conversation from URL
   useEffect(() => {
     if (conversationId && conversations.length) {
       const c = conversations.find(c => c.id === conversationId);
@@ -138,7 +148,8 @@ export default function InboxPage() {
       (filter === 'active' && c.status === 'active' && !c.agent_paused) ||
       (filter === 'paused' && c.agent_paused) ||
       (filter === 'transferred' && c.status === 'transferred');
-    return matchSearch && matchFilter;
+    const matchDevice = deviceFilter === 'all' || c.device_id === deviceFilter;
+    return matchSearch && matchFilter && matchDevice;
   });
 
   const statusColor = (c: Conversation) => {
@@ -153,12 +164,9 @@ export default function InboxPage() {
     switch (msg.media_type) {
       case 'image':
         return (
-          <img
-            src={msg.media_url}
-            alt="Imagem"
+          <img src={msg.media_url} alt="Imagem"
             className="max-w-[200px] rounded-lg cursor-pointer hover:opacity-80"
-            onClick={() => setLightboxUrl(msg.media_url)}
-          />
+            onClick={() => setLightboxUrl(msg.media_url)} />
         );
       case 'audio':
         return <audio controls src={msg.media_url} className="max-w-[250px]" />;
@@ -193,6 +201,19 @@ export default function InboxPage() {
               </button>
             ))}
           </div>
+          {devices.length > 0 && (
+            <Select value={deviceFilter} onValueChange={setDeviceFilter}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Todos os dispositivos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os dispositivos</SelectItem>
+                {devices.map(d => (
+                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -243,9 +264,17 @@ export default function InboxPage() {
           <>
             {/* Header */}
             <div className="h-14 border-b flex items-center justify-between px-4 bg-background">
-              <div>
-                <p className="font-medium text-sm">{activeConv.contact_name || activeConv.contact_number}</p>
-                <p className="text-xs text-muted-foreground">{activeConv.contact_number}</p>
+              <div className="flex items-center gap-3">
+                <div>
+                  <p className="font-medium text-sm">{activeConv.contact_name || activeConv.contact_number}</p>
+                  <p className="text-xs text-muted-foreground">{activeConv.contact_number}</p>
+                </div>
+                {(activeConv as any).devices?.name && (
+                  <Badge variant="outline" className="text-xs gap-1">
+                    <Smartphone className="h-3 w-3" />
+                    {(activeConv as any).devices.name}
+                  </Badge>
+                )}
               </div>
               <Button
                 variant={activeConv.agent_paused ? 'default' : 'outline'}

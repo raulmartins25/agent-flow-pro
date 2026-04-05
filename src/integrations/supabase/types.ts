@@ -79,9 +79,7 @@ export type Database = {
       agents: {
         Row: {
           created_at: string
-          evolution_api_key: string | null
-          evolution_api_url: string | null
-          evolution_instance: string | null
+          device_id: string | null
           followup_interval_minutes: number | null
           followup_max: number | null
           followup_start_message: number | null
@@ -101,9 +99,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          evolution_api_key?: string | null
-          evolution_api_url?: string | null
-          evolution_instance?: string | null
+          device_id?: string | null
           followup_interval_minutes?: number | null
           followup_max?: number | null
           followup_start_message?: number | null
@@ -123,9 +119,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          evolution_api_key?: string | null
-          evolution_api_url?: string | null
-          evolution_instance?: string | null
+          device_id?: string | null
           followup_interval_minutes?: number | null
           followup_max?: number | null
           followup_start_message?: number | null
@@ -143,7 +137,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "agents_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       blast_campaigns: {
         Row: {
@@ -282,8 +284,10 @@ export type Database = {
           contact_name: string | null
           contact_number: string
           created_at: string
+          device_id: string | null
           followup_count: number
           id: string
+          instance_name: string | null
           is_waiting_reply: boolean
           last_message_at: string | null
           status: Database["public"]["Enums"]["conversation_status"]
@@ -294,8 +298,10 @@ export type Database = {
           contact_name?: string | null
           contact_number: string
           created_at?: string
+          device_id?: string | null
           followup_count?: number
           id?: string
+          instance_name?: string | null
           is_waiting_reply?: boolean
           last_message_at?: string | null
           status?: Database["public"]["Enums"]["conversation_status"]
@@ -306,8 +312,10 @@ export type Database = {
           contact_name?: string | null
           contact_number?: string
           created_at?: string
+          device_id?: string | null
           followup_count?: number
           id?: string
+          instance_name?: string | null
           is_waiting_reply?: boolean
           last_message_at?: string | null
           status?: Database["public"]["Enums"]["conversation_status"]
@@ -320,7 +328,56 @@ export type Database = {
             referencedRelation: "agents"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "conversations_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      devices: {
+        Row: {
+          created_at: string
+          evolution_api_key: string
+          evolution_api_url: string
+          id: string
+          instance_name: string
+          last_connected_at: string | null
+          name: string
+          phone_number: string | null
+          qr_code: string | null
+          status: Database["public"]["Enums"]["device_status"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          evolution_api_key: string
+          evolution_api_url: string
+          id?: string
+          instance_name: string
+          last_connected_at?: string | null
+          name: string
+          phone_number?: string | null
+          qr_code?: string | null
+          status?: Database["public"]["Enums"]["device_status"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          evolution_api_key?: string
+          evolution_api_url?: string
+          id?: string
+          instance_name?: string
+          last_connected_at?: string | null
+          name?: string
+          phone_number?: string | null
+          qr_code?: string | null
+          status?: Database["public"]["Enums"]["device_status"]
+          user_id?: string
+        }
+        Relationships: []
       }
       messages: {
         Row: {
@@ -460,6 +517,7 @@ export type Database = {
       campaign_status: "pending" | "running" | "paused" | "completed" | "error"
       contact_status: "pending" | "sent" | "error" | "replied"
       conversation_status: "active" | "paused" | "transferred" | "closed"
+      device_status: "disconnected" | "connecting" | "connected" | "error"
       llm_provider: "claude" | "openai" | "deepseek"
       media_type: "image" | "audio" | "document" | "video"
       message_role: "user" | "assistant" | "system"
@@ -598,6 +656,7 @@ export const Constants = {
       campaign_status: ["pending", "running", "paused", "completed", "error"],
       contact_status: ["pending", "sent", "error", "replied"],
       conversation_status: ["active", "paused", "transferred", "closed"],
+      device_status: ["disconnected", "connecting", "connected", "error"],
       llm_provider: ["claude", "openai", "deepseek"],
       media_type: ["image", "audio", "document", "video"],
       message_role: ["user", "assistant", "system"],

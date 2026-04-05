@@ -18,13 +18,23 @@ serve(async (req) => {
 
     const { data: campaign } = await supabase
       .from("blast_campaigns")
-      .select("*, agents(id, evolution_api_url, evolution_api_key, evolution_instance, prompt_compiled, type, agent_config(first_prospecting_message, agent_persona_name, company_name))")
+      .select("*, agents(id, prompt_compiled, type, device_id, agent_config(first_prospecting_message, agent_persona_name, company_name), devices(id, evolution_api_url, evolution_api_key, instance_name, status))")
       .eq("id", campaign_id)
       .single();
 
     if (!campaign || !campaign.agents) {
       return new Response(JSON.stringify({ error: "Campaign or agent not found" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const agent = campaign.agents;
+    const device = agent.devices;
+
+    if (!device || device.status !== "connected") {
+      await supabase.from("blast_campaigns").update({ status: "error" }).eq("id", campaign_id);
+      return new Response(JSON.stringify({ error: "Dispositivo desconectado" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -55,7 +65,6 @@ serve(async (req) => {
 
     let sentCount = 0;
     let errorCount = 0;
-    const agent = campaign.agents;
     const agentConfig = agent.agent_config?.[0];
     const blastMessage = agentConfig?.first_prospecting_message || "Olá!";
     const agentPersonaName = agentConfig?.agent_persona_name || "";
@@ -79,12 +88,12 @@ serve(async (req) => {
           .replace("{{empresa}}", companyName);
 
         const res = await fetch(
-          `${agent.evolution_api_url}/message/sendText/${agent.evolution_instance}`,
+          `${device.evolution_api_url}/message/sendText/${device.instance_name}`,
           {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              apikey: agent.evolution_api_key || "",
+              apikey: device.evolution_api_key || "",
             },
             body: JSON.stringify({
               number: contact.phone,
@@ -98,6 +107,8 @@ serve(async (req) => {
             .from("conversations")
             .insert({
               agent_id: agent.id,
+              device_id: device.id,
+              instance_name: device.instance_name,
               contact_number: contact.phone,
               contact_name: contact.name || contact.phone,
               status: "active",

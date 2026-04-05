@@ -2,37 +2,34 @@ import { useAgentStore } from '@/stores/agentStore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Headphones, Send, Wifi } from 'lucide-react';
-import { toast } from 'sonner';
-import { useState } from 'react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Headphones, Send, Smartphone } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { Link } from 'react-router-dom';
+
+type Device = {
+  id: string;
+  name: string;
+  phone_number: string | null;
+  status: string;
+};
 
 export function WizardStep1() {
   const { wizardData, updateWizardData } = useAgentStore();
-  const [testing, setTesting] = useState(false);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const testConnection = async () => {
-    if (!wizardData.evolution_api_url || !wizardData.evolution_api_key || !wizardData.evolution_instance) {
-      toast.error('Preencha todos os campos da Evolution API');
-      return;
-    }
-    setTesting(true);
-    try {
-      const res = await fetch(
-        `${wizardData.evolution_api_url}/instance/connectionState/${wizardData.evolution_instance}`,
-        { headers: { apikey: wizardData.evolution_api_key } }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        toast.success(`Conexão: ${data?.instance?.state || 'OK'}`);
-      } else {
-        toast.error('Falha na conexão');
-      }
-    } catch {
-      toast.error('Erro ao conectar com a Evolution API');
-    }
-    setTesting(false);
-  };
+  useEffect(() => {
+    supabase
+      .from('devices')
+      .select('id, name, phone_number, status')
+      .eq('status', 'connected')
+      .then(({ data }) => {
+        setDevices((data as Device[]) ?? []);
+        setLoading(false);
+      });
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -64,22 +61,37 @@ export function WizardStep1() {
           <Label>Nome do agente</Label>
           <Input value={wizardData.name} onChange={(e) => updateWizardData({ name: e.target.value })} placeholder="Ex: Agente de Vendas" />
         </div>
+
         <div className="space-y-2">
-          <Label>URL da Evolution API</Label>
-          <Input value={wizardData.evolution_api_url} onChange={(e) => updateWizardData({ evolution_api_url: e.target.value })} placeholder="https://api.evolution.com" />
+          <Label>Dispositivo WhatsApp</Label>
+          {loading ? (
+            <div className="h-10 flex items-center text-sm text-muted-foreground">Carregando dispositivos...</div>
+          ) : devices.length === 0 ? (
+            <div className="rounded-md border border-dashed p-4 text-center space-y-2">
+              <Smartphone className="h-6 w-6 mx-auto text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Nenhum dispositivo conectado.</p>
+              <Link to="/devices" className="text-sm text-primary hover:underline">
+                Adicione um dispositivo primeiro →
+              </Link>
+            </div>
+          ) : (
+            <Select
+              value={wizardData.device_id}
+              onValueChange={(val) => updateWizardData({ device_id: val })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um dispositivo" />
+              </SelectTrigger>
+              <SelectContent>
+                {devices.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.name} {d.phone_number ? `(${d.phone_number})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
-        <div className="space-y-2">
-          <Label>API Key</Label>
-          <Input type="password" value={wizardData.evolution_api_key} onChange={(e) => updateWizardData({ evolution_api_key: e.target.value })} placeholder="Sua chave da API" />
-        </div>
-        <div className="space-y-2">
-          <Label>Nome da instância</Label>
-          <Input value={wizardData.evolution_instance} onChange={(e) => updateWizardData({ evolution_instance: e.target.value })} placeholder="minha-instancia" />
-        </div>
-        <Button variant="outline" onClick={testConnection} disabled={testing}>
-          <Wifi className="mr-2 h-4 w-4" />
-          {testing ? 'Testando...' : 'Testar conexão'}
-        </Button>
       </div>
     </div>
   );
