@@ -54,20 +54,31 @@ REGRAS DE COMUNICAÇÃO OBRIGATÓRIAS:
 RESTRIÇÕES ABSOLUTAS:
 ${data.ai_restrictions || 'Nenhuma restrição específica.'}`;
 
-  const messageSection = data.type === 'receptive'
-    ? `FLUXO DE ATENDIMENTO:
+  let messageSection: string;
+
+  if (data.type === 'receptive') {
+    messageSection = `FLUXO DE ATENDIMENTO:
 Mensagem de boas-vindas: "${data.welcome_message}"
 
 Após a saudação, conduza o lead pelas seguintes perguntas de qualificação, uma por vez:
-${questionsFormatted}`
-    : `CONTEXTO:
-Este é um contato frio. Você foi quem iniciou a conversa. Seja especialmente respeitoso e não agressivo.
-Se em 2 mensagens o lead deixar claro que não tem interesse, encerre imediatamente.
+${questionsFormatted}`;
+  } else {
+    messageSection = `CONTEXTO DE PROSPECÇÃO:
+Você está participando de uma conversa iniciada por disparo da ${data.company_name || 'empresa'}.
+A mensagem de disparo enviada foi: "${data.first_prospecting_message}"
+O lead respondeu a essa mensagem. A partir de agora VOCÊ assume a conversa.
 
-Abordagem inicial: "${data.first_prospecting_message}"
+IMPORTANTE:
+- Não mencione que enviamos uma mensagem antes — trate como continuação natural
+- Se o lead respondeu positivamente: demonstre empatia com a resposta dele e inicie a qualificação
+- Se o lead respondeu com dúvida ou neutralidade: esclareça brevemente e inicie a qualificação
+- Se o lead respondeu negativamente (não tenho interesse, quem é você, etc.): trate como objeção inicial
+- NUNCA reenvie ou repita a mensagem de disparo
+- Se em 2 mensagens o lead deixar claro que não tem interesse, encerre imediatamente.
 
 Perguntas de qualificação (faça uma por vez):
 ${questionsFormatted}`;
+  }
 
   return `${base}
 

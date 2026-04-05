@@ -32,7 +32,7 @@ serve(async (req) => {
       // Find agent by instance
       const { data: agent } = await supabase
         .from("agents")
-        .select("id, user_id, status, prompt_compiled, llm_provider, llm_model, llm_api_key")
+        .select("id, user_id, status, type, prompt_compiled, llm_provider, llm_model, llm_api_key")
         .eq("evolution_instance", instanceName)
         .eq("status", "active")
         .single();
@@ -96,8 +96,16 @@ serve(async (req) => {
         .update({ last_message_at: new Date().toISOString() })
         .eq("id", conversation.id);
 
-      // If agent is paused or message is from us, skip AI processing
-      if (conversation.agent_paused || fromMe) {
+      // --- PROSPECTING FLOW: If agent_paused (set by blast-processor), this is the first lead reply ---
+      if (!fromMe && conversation.agent_paused && agent.type === "prospecting") {
+        // Lead replied to blast — activate AI by flipping agent_paused
+        await supabase
+          .from("conversations")
+          .update({ agent_paused: false })
+          .eq("id", conversation.id);
+        // Continue to AI processing below (don't skip)
+      } else if (conversation.agent_paused || fromMe) {
+        // Agent is manually paused or message is from us — skip AI processing
         return new Response(JSON.stringify({ ok: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });

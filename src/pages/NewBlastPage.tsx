@@ -59,12 +59,21 @@ export default function NewBlastPage() {
   const [batchSize, setBatchSize] = useState('10');
   const [intervalSeconds, setIntervalSeconds] = useState('45');
   const [saving, setSaving] = useState(false);
+  const [blastPreview, setBlastPreview] = useState('');
 
   useEffect(() => {
     supabase.from('agents').select('id, name, type').eq('type', 'prospecting').then(({ data }) => {
       setAgents(data ?? []);
     });
   }, []);
+
+  // Fetch blast message when agent is selected
+  useEffect(() => {
+    if (!selectedAgent) { setBlastPreview(''); return; }
+    supabase.from('agent_config').select('first_prospecting_message').eq('agent_id', selectedAgent).single().then(({ data }) => {
+      setBlastPreview(data?.first_prospecting_message || '');
+    });
+  }, [selectedAgent]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -201,6 +210,23 @@ export default function NewBlastPage() {
               <Input value={campaignName} onChange={e => setCampaignName(e.target.value)} placeholder="Ex: Campanha Janeiro" />
             </div>
           </div>
+
+          {blastPreview && (
+            <div className="space-y-2 border-t pt-4">
+              <Label className="text-sm font-medium">Mensagem que será enviada para cada contato:</Label>
+              <div className="rounded-xl bg-muted/50 p-4">
+                <div className="max-w-xs ml-auto">
+                  <div className="rounded-lg bg-blue-500/20 px-4 py-2 text-sm">
+                    {blastPreview.replace('{{nome_contato}}', 'João').replace('{{nome_agente}}', '').replace('{{empresa}}', '')}
+                  </div>
+                  <p className="text-xs text-muted-foreground text-right mt-1">Enviado por você (disparo)</p>
+                </div>
+              </div>
+              <p className="text-xs text-amber-400">
+                ⚡ Após a resposta do lead, o agente assumirá a conversa automaticamente.
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
