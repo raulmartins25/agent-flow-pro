@@ -60,6 +60,8 @@ export default function NewBlastPage() {
   const [intervalSeconds, setIntervalSeconds] = useState('45');
   const [saving, setSaving] = useState(false);
   const [blastPreview, setBlastPreview] = useState('');
+  const [previewAgentName, setPreviewAgentName] = useState('');
+  const [previewCompanyName, setPreviewCompanyName] = useState('');
 
   useEffect(() => {
     supabase.from('agents').select('id, name, type').eq('type', 'prospecting').then(({ data }) => {
@@ -67,11 +69,13 @@ export default function NewBlastPage() {
     });
   }, []);
 
-  // Fetch blast message when agent is selected
+  // Fetch blast message + agent config when agent is selected
   useEffect(() => {
-    if (!selectedAgent) { setBlastPreview(''); return; }
-    supabase.from('agent_config').select('first_prospecting_message').eq('agent_id', selectedAgent).single().then(({ data }) => {
+    if (!selectedAgent) { setBlastPreview(''); setPreviewAgentName(''); setPreviewCompanyName(''); return; }
+    supabase.from('agent_config').select('first_prospecting_message, agent_persona_name, company_name').eq('agent_id', selectedAgent).single().then(({ data }) => {
       setBlastPreview(data?.first_prospecting_message || '');
+      setPreviewAgentName(data?.agent_persona_name || '');
+      setPreviewCompanyName(data?.company_name || '');
     });
   }, [selectedAgent]);
 
@@ -217,9 +221,9 @@ export default function NewBlastPage() {
               <div className="rounded-xl bg-muted/50 p-4">
                 <div className="max-w-xs ml-auto">
                   <div className="rounded-lg bg-blue-500/20 px-4 py-2 text-sm">
-                    {blastPreview.replace('{{nome_contato}}', 'João').replace('{{nome_agente}}', '').replace('{{empresa}}', '')}
+                    {blastPreview.replace('{{nome_contato}}', 'João').replace('{{nome_agente}}', previewAgentName || 'Agente').replace('{{empresa}}', previewCompanyName || 'Empresa')}
                   </div>
-                  <p className="text-xs text-muted-foreground text-right mt-1">Enviado por você (disparo)</p>
+                  <p className="text-xs text-muted-foreground text-right mt-1">Enviado por você via disparo</p>
                 </div>
               </div>
               <p className="text-xs text-amber-400">

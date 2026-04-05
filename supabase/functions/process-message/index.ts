@@ -72,9 +72,11 @@ serve(async (req) => {
     if (agentFull?.type === "prospecting") {
       const userMessages = history.filter((m: any) => m.role === "user");
       if (userMessages.length === 1) {
-        // First response from lead after blast — inject context
-        systemPrompt += `\n\nINSTRUÇÃO ESPECIAL (primeira resposta do lead):
-O lead acabou de responder sua mensagem de disparo. Responda de forma natural continuando a conversa, demonstre interesse na resposta dele e inicie a qualificação. NÃO repita a mensagem de disparo.`;
+        systemPrompt += `\n\nINSTRUÇÃO PARA ESTA RESPOSTA:
+O lead acabou de responder sua mensagem de disparo pela primeira vez.
+Responda de forma natural e calorosa, mostrando que leu a resposta dele.
+Demonstre interesse genuíno antes de iniciar as perguntas de qualificação.
+Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico à resposta dele.`;
       }
     }
 
