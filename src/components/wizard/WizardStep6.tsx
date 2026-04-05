@@ -8,7 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Sparkles, Zap, DollarSign, Smile } from 'lucide-react';
+import { Sparkles, Zap, DollarSign, Smile, CheckCircle2, AlertCircle } from 'lucide-react';
+
+const formatPhone = (digits: string) => {
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)} ${digits.slice(2)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 2)} ${digits.slice(2, 4)} ${digits.slice(4)}`;
+  return `${digits.slice(0, 2)} ${digits.slice(2, 4)} ${digits.slice(4, 9)}-${digits.slice(9)}`;
+};
 
 const llmOptions = [
   { provider: 'claude' as const, model: 'claude-sonnet-4-20250514', name: 'Claude Sonnet', desc: 'Melhor qualidade', speed: '⚡⚡', quality: '⭐⭐⭐⭐⭐', cost: '$$' },
