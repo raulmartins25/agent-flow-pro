@@ -284,6 +284,7 @@ export type Database = {
           created_at: string
           followup_count: number
           id: string
+          is_waiting_reply: boolean
           last_message_at: string | null
           status: Database["public"]["Enums"]["conversation_status"]
         }
@@ -295,6 +296,7 @@ export type Database = {
           created_at?: string
           followup_count?: number
           id?: string
+          is_waiting_reply?: boolean
           last_message_at?: string | null
           status?: Database["public"]["Enums"]["conversation_status"]
         }
@@ -306,6 +308,7 @@ export type Database = {
           created_at?: string
           followup_count?: number
           id?: string
+          is_waiting_reply?: boolean
           last_message_at?: string | null
           status?: Database["public"]["Enums"]["conversation_status"]
         }

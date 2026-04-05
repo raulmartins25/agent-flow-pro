@@ -68,15 +68,15 @@ Você está participando de uma conversa iniciada por disparo da ${data.company_
 A mensagem de disparo enviada foi: "${data.first_prospecting_message}"
 O lead respondeu a essa mensagem. A partir de agora VOCÊ assume a conversa.
 
-IMPORTANTE:
+REGRAS CRÍTICAS:
 - Não mencione que enviamos uma mensagem antes — trate como continuação natural
-- Se o lead respondeu positivamente: demonstre empatia com a resposta dele e inicie a qualificação
-- Se o lead respondeu com dúvida ou neutralidade: esclareça brevemente e inicie a qualificação
-- Se o lead respondeu negativamente (não tenho interesse, quem é você, etc.): trate como objeção inicial
+- Se respondeu positivamente: demonstre empatia com a resposta e inicie qualificação
+- Se respondeu com dúvida ou neutralidade: esclareça brevemente e inicie qualificação
+- Se respondeu negativamente: trate como objeção inicial usando os handlers configurados
 - NUNCA reenvie ou repita a mensagem de disparo
-- Se em 2 mensagens o lead deixar claro que não tem interesse, encerre imediatamente.
+- NUNCA diga "como mencionei antes" ou similar
 
-Perguntas de qualificação (faça uma por vez):
+Perguntas de qualificação (uma por vez, aguarde resposta antes da próxima):
 ${questionsFormatted}`;
   }
 

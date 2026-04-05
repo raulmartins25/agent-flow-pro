@@ -33,7 +33,7 @@ export function WizardStep3() {
           placeholder={
             isReceptive
               ? 'Mensagem de boas-vindas...'
-              : 'Ex: Olá {{nome_contato}}! Vi que você tem interesse em [tema]. Posso te enviar algumas informações?'
+              : 'Ex: Olá {{nome_contato}}! Vi que você tem interesse em [tema]. Posso compartilhar algumas informações?'
           }
         />
         <p className="text-xs text-muted-foreground">
@@ -58,7 +58,7 @@ export function WizardStep3() {
               {preview}
             </div>
             <p className="text-xs text-muted-foreground text-right mt-1">
-              {isReceptive ? 'Agora' : 'Enviado por você (disparo)'}
+              {isReceptive ? 'Agora' : 'Enviado por você via disparo'}
             </p>
           </div>
         </div>

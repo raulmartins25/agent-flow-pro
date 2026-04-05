@@ -16,10 +16,9 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Fetch campaign with agent + agent_config for first_prospecting_message
     const { data: campaign } = await supabase
       .from("blast_campaigns")
-      .select("*, agents(id, evolution_api_url, evolution_api_key, evolution_instance, prompt_compiled, type, agent_config(first_prospecting_message))")
+      .select("*, agents(id, evolution_api_url, evolution_api_key, evolution_instance, prompt_compiled, type, agent_config(first_prospecting_message, agent_persona_name, company_name))")
       .eq("id", campaign_id)
       .single();
 
@@ -57,10 +56,10 @@ serve(async (req) => {
     let sentCount = 0;
     let errorCount = 0;
     const agent = campaign.agents;
-
-    // Use first_prospecting_message from agent_config instead of prompt_compiled
     const agentConfig = agent.agent_config?.[0];
     const blastMessage = agentConfig?.first_prospecting_message || "Olá!";
+    const agentPersonaName = agentConfig?.agent_persona_name || "";
+    const companyName = agentConfig?.company_name || "";
 
     for (const contact of contacts) {
       try {
@@ -74,12 +73,11 @@ serve(async (req) => {
           break;
         }
 
-        // Compose message with variables
         const message = blastMessage
           .replace("{{nome_contato}}", contact.name || "")
-          .replace("{{empresa}}", ""); // empresa from config if needed
+          .replace("{{nome_agente}}", agentPersonaName)
+          .replace("{{empresa}}", companyName);
 
-        // Send via Evolution API
         const res = await fetch(
           `${agent.evolution_api_url}/message/sendText/${agent.evolution_instance}`,
           {
@@ -96,7 +94,6 @@ serve(async (req) => {
         );
 
         if (res.ok) {
-          // Create conversation for this contact — AI will take over when lead replies
           const { data: conversation } = await supabase
             .from("conversations")
             .insert({
@@ -104,12 +101,11 @@ serve(async (req) => {
               contact_number: contact.phone,
               contact_name: contact.name || contact.phone,
               status: "active",
-              agent_paused: true, // AI won't respond until lead replies (webhook flips this)
+              is_waiting_reply: true,
             })
             .select()
             .single();
 
-          // Save blast message as assistant (it was sent by the system on behalf of user)
           if (conversation) {
             await supabase.from("messages").insert({
               conversation_id: conversation.id,
@@ -132,13 +128,11 @@ serve(async (req) => {
           errorCount++;
         }
 
-        // Anti-ban: random delay ±20%
         const baseDelay = intervalSeconds * 1000;
         const variation = baseDelay * 0.2;
         const delay = baseDelay + (Math.random() * variation * 2 - variation);
         await new Promise((r) => setTimeout(r, delay));
 
-        // Anti-ban: stop if error rate > 20%
         if (sentCount + errorCount > 5 && errorCount / (sentCount + errorCount) > 0.2) {
           await supabase
             .from("blast_campaigns")
