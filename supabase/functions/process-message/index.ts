@@ -245,8 +245,7 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       console.log(`Enviando resumo para número de transferência: ${agentFull.transfer_number}`);
       console.log(`Transferência sairá pelo device do agente ativo: ${device.name} (${evoInstance})`);
       console.log(`NÃO para o lead: ${contact_number}`);
-      const userMessages = history.filter((m: any) => m.role === "user");
-      const questions = (config?.qualification_questions as any[]) || [];
+      // userMessages and questions already declared above
 
       let perguntasRespostas = "";
       console.log(`Transfer mapping: ${questions.length} questions, ${userMessages.length} user messages, type=${agentFull.type}`);
@@ -385,6 +384,83 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
         });
       } catch (mediaErr) {
         console.error("Error sending media:", mediaErr);
+      }
+    }
+
+    // --- Programmatic media detection ---
+    // Check if the current question in the flow has media that should be sent
+    if (questions.length > 0 && mediaMatches.length === 0) {
+      const currentQuestionIndex = answeredQuestions; // 0-based: after N answers, we're on question N+1, but check the one just answered
+      const lastAnsweredIndex = answeredQuestions - 1;
+      
+      console.log(`Media auto-detect: answeredQuestions=${answeredQuestions}, checking indices around ${lastAnsweredIndex}`);
+      
+      // Check each question that has media and hasn't been sent yet
+      for (let qi = 0; qi <= lastAnsweredIndex && qi < questions.length; qi++) {
+        const q = questions[qi];
+        if (!q?.media?.file_url) continue;
+        
+        const media = q.media;
+        const sendCondition = media.send_condition || "always";
+        
+        // Check if media was already sent in this conversation
+        const { data: existingMedia } = await supabase
+          .from("messages")
+          .select("id")
+          .eq("conversation_id", conversation_id)
+          .eq("media_url", media.file_url)
+          .limit(1);
+        
+        if (existingMedia && existingMedia.length > 0) {
+          console.log(`Media for Q${qi + 1} already sent, skipping`);
+          continue;
+        }
+        
+        let shouldSendMedia = false;
+        
+        if (sendCondition === "always") {
+          shouldSendMedia = true;
+        } else if (sendCondition === "positive_response" || sendCondition === "explicit_yes") {
+          const answer = userMessages[qi + offset]?.content?.toLowerCase() || "";
+          const negativeWords = ["não", "nao", "nunca", "jamais", "negativo", "sem interesse", "no"];
+          const isNegative = negativeWords.some(w => answer.includes(w));
+          shouldSendMedia = !isNegative && answer.length > 0;
+        }
+        
+        if (shouldSendMedia) {
+          console.log(`Auto-sending media for Q${qi + 1}: ${media.file_type} - ${media.file_url.substring(0, 80)}`);
+          try {
+            if (media.file_type === "audio") {
+              await fetch(`${evoUrl}/message/sendWhatsAppAudio/${evoInstance}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", apikey: evoKey || "" },
+                body: JSON.stringify({ number: contact_number, audio: media.file_url }),
+              });
+            } else {
+              await fetch(`${evoUrl}/message/sendMedia/${evoInstance}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", apikey: evoKey || "" },
+                body: JSON.stringify({
+                  number: contact_number,
+                  mediatype: media.file_type,
+                  media: media.file_url,
+                  ...(media.file_type === "document" ? { fileName: media.file_name || "documento" } : {}),
+                }),
+              });
+            }
+
+            await supabase.from("messages").insert({
+              conversation_id,
+              role: "assistant",
+              media_url: media.file_url,
+              media_type: media.file_type,
+              content: media.offer_message || null,
+            });
+            console.log(`Media auto-sent successfully for Q${qi + 1}`);
+          } catch (mediaErr) {
+            console.error(`Error auto-sending media for Q${qi + 1}:`, mediaErr);
+          }
+        }
       }
     }
 
