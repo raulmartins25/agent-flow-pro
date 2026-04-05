@@ -200,6 +200,7 @@ serve(async (req) => {
             agent,
             history: history || [],
             contact_number: remoteJid,
+            contact_name: conversation.contact_name || contactName,
             instance_name: instanceName,
             device_id: device.id,
           }),
