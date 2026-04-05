@@ -121,11 +121,17 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
         headers: { Authorization: `Bearer ${agent.llm_api_key}`, "Content-Type": "application/json" },
         body: JSON.stringify({ model: agent.llm_model || "deepseek-chat", messages }),
       });
-      const data = await res.json();
+      const resText = await res.text();
+      console.log(`DeepSeek API: status=${res.status}, body=${resText.substring(0, 500)}`);
+      if (!res.ok) {
+        throw new Error(`DeepSeek API error ${res.status}: ${resText.substring(0, 300)}`);
+      }
+      const data = JSON.parse(resText);
       aiResponse = data.choices?.[0]?.message?.content || "";
     }
 
     if (!aiResponse) {
+      console.error(`Empty AI response. Provider=${agent.llm_provider}, Model=${agent.llm_model}`);
       return new Response(JSON.stringify({ error: "Empty AI response" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
