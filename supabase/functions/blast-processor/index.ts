@@ -16,9 +16,10 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // Fetch campaign with agent + agent_config for first_prospecting_message
     const { data: campaign } = await supabase
       .from("blast_campaigns")
-      .select("*, agents(evolution_api_url, evolution_api_key, evolution_instance, prompt_compiled, type)")
+      .select("*, agents(id, evolution_api_url, evolution_api_key, evolution_instance, prompt_compiled, type, agent_config(first_prospecting_message))")
       .eq("id", campaign_id)
       .single();
 
@@ -28,13 +29,11 @@ serve(async (req) => {
       });
     }
 
-    // Update campaign status
     await supabase
       .from("blast_campaigns")
       .update({ status: "running", started_at: new Date().toISOString() })
       .eq("id", campaign_id);
 
-    // Get pending contacts in batches
     const batchSize = campaign.batch_size || 10;
     const intervalSeconds = campaign.interval_seconds || 45;
 
@@ -59,9 +58,12 @@ serve(async (req) => {
     let errorCount = 0;
     const agent = campaign.agents;
 
+    // Use first_prospecting_message from agent_config instead of prompt_compiled
+    const agentConfig = agent.agent_config?.[0];
+    const blastMessage = agentConfig?.first_prospecting_message || "Olá!";
+
     for (const contact of contacts) {
       try {
-        // Check if campaign is still running
         const { data: currentCampaign } = await supabase
           .from("blast_campaigns")
           .select("status")
@@ -72,10 +74,12 @@ serve(async (req) => {
           break;
         }
 
-        // Send message via Evolution API
-        const message = (agent.prompt_compiled || "Olá!")
-          .replace("{{nome_contato}}", contact.name || "");
+        // Compose message with variables
+        const message = blastMessage
+          .replace("{{nome_contato}}", contact.name || "")
+          .replace("{{empresa}}", ""); // empresa from config if needed
 
+        // Send via Evolution API
         const res = await fetch(
           `${agent.evolution_api_url}/message/sendText/${agent.evolution_instance}`,
           {
@@ -92,6 +96,28 @@ serve(async (req) => {
         );
 
         if (res.ok) {
+          // Create conversation for this contact — AI will take over when lead replies
+          const { data: conversation } = await supabase
+            .from("conversations")
+            .insert({
+              agent_id: agent.id,
+              contact_number: contact.phone,
+              contact_name: contact.name || contact.phone,
+              status: "active",
+              agent_paused: true, // AI won't respond until lead replies (webhook flips this)
+            })
+            .select()
+            .single();
+
+          // Save blast message as assistant (it was sent by the system on behalf of user)
+          if (conversation) {
+            await supabase.from("messages").insert({
+              conversation_id: conversation.id,
+              role: "assistant",
+              content: message,
+            });
+          }
+
           await supabase
             .from("blast_contacts")
             .update({ status: "sent", sent_at: new Date().toISOString() })
@@ -130,7 +156,6 @@ serve(async (req) => {
       }
     }
 
-    // Update campaign counts
     await supabase
       .from("blast_campaigns")
       .update({
@@ -139,7 +164,6 @@ serve(async (req) => {
       })
       .eq("id", campaign_id);
 
-    // Check if there are more pending contacts
     const { count } = await supabase
       .from("blast_contacts")
       .select("id", { count: "exact", head: true })
