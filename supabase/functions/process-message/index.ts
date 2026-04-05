@@ -232,8 +232,6 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
     const answeredQuestions = userMessages.length - offset;
     const transferTrigger = agentFull?.transfer_trigger || "after_all_questions";
 
-    console.log(`Transfer check: tokenBased=${shouldTransfer}, programmatic: answered=${answeredQuestions}/${questions.length}, trigger=${transferTrigger}, transfer_number=${agentFull?.transfer_number}`);
-
     // Check if conversation is already transferred — avoid duplicate transfers
     const { data: convStatus } = await supabase
       .from("conversations")
@@ -242,11 +240,15 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       .single();
     const alreadyTransferred = convStatus?.status === "transferred";
 
+    console.log(`Transfer check: tokenBased=${shouldTransfer}, programmatic: answered=${answeredQuestions}/${questions.length}, trigger=${transferTrigger}, transfer_number=${agentFull?.transfer_number}, alreadyTransferred=${alreadyTransferred}`);
+
+    // Only trigger at the EXACT moment of completion (answeredQuestions === totalQuestions)
+    // Not >= which would re-trigger on every subsequent message
     if (!shouldTransfer && !alreadyTransferred && transferTrigger === "after_all_questions" 
-        && questions.length > 0 && answeredQuestions >= questions.length 
+        && questions.length > 0 && answeredQuestions === questions.length 
         && agentFull?.transfer_number) {
       shouldTransfer = true;
-      console.log("Transfer FORCED programmatically: all questions answered");
+      console.log("Transfer FORCED programmatically: exactly all questions answered this turn");
     }
 
     if (alreadyTransferred) {
