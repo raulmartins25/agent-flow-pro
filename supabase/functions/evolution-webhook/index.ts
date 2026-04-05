@@ -100,16 +100,22 @@ serve(async (req) => {
         .eq("agent_id", agent.id)
         .eq("device_id", device.id)
         .eq("contact_number", remoteJid)
-        .in("status", ["active", "paused"])
         .order("created_at", { ascending: false });
 
       let conversation = null;
 
       if (allConvs && allConvs.length > 0) {
-        // Prioritize: is_waiting_reply first, then most recent
+        // Prioritize: is_waiting_reply first, then active/paused, then any
         const waitingConv = allConvs.find((c: any) => c.is_waiting_reply);
-        conversation = waitingConv || allConvs[0];
-        console.log("Using existing conversation:", conversation.id, "is_waiting_reply:", conversation.is_waiting_reply);
+        const activeConv = allConvs.find((c: any) => c.status === "active" || c.status === "paused");
+        conversation = waitingConv || activeConv || allConvs[0];
+        
+        // Reactivate if transferred/closed
+        if (conversation.status === "transferred" || conversation.status === "closed") {
+          await supabase.from("conversations").update({ status: "active" }).eq("id", conversation.id);
+          conversation.status = "active";
+        }
+        console.log("Using existing conversation:", conversation.id, "status:", conversation.status, "is_waiting_reply:", conversation.is_waiting_reply);
       }
 
       if (!conversation) {
