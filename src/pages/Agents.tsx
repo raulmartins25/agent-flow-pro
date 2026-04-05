@@ -3,20 +3,46 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Bot, Plus, TestTube, Smartphone } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 export default function Agents() {
   const [agents, setAgents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    supabase.from('agents').select('*, devices(name, phone_number)').order('created_at', { ascending: false }).then(({ data, error }) => {
-      if (error) console.error(error);
-      setAgents(data ?? []);
-      setLoading(false);
-    });
-  }, []);
+  const fetchAgents = async () => {
+    const { data, error } = await supabase.from('agents').select('*, devices(name, phone_number)').order('created_at', { ascending: false });
+    if (error) console.error(error);
+    setAgents(data ?? []);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchAgents(); }, []);
+
+  const toggleStatus = async (agent: any) => {
+    const newStatus = agent.status === 'active' ? 'inactive' : 'active';
+
+    // Block if activating and device already has another active agent
+    if (newStatus === 'active' && agent.device_id) {
+      const { data: existing } = await supabase
+        .from('agents')
+        .select('id, name')
+        .eq('device_id', agent.device_id)
+        .eq('status', 'active')
+        .neq('id', agent.id);
+      if (existing && existing.length > 0) {
+        toast.error(`Dispositivo já tem agente ativo: ${existing[0].name}`);
+        return;
+      }
+    }
+
+    const { error } = await supabase.from('agents').update({ status: newStatus }).eq('id', agent.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success(newStatus === 'active' ? 'Agente ativado' : 'Agente desativado');
+    fetchAgents();
+  };
 
   const statusColors: Record<string, string> = {
     active: 'bg-primary/20 text-primary',
@@ -60,9 +86,15 @@ export default function Agents() {
             <Card key={agent.id} className="hover:border-primary/50 transition-colors">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-base">{agent.name}</CardTitle>
-                <Badge variant="secondary" className={statusColors[agent.status] || ''}>
-                  {agent.status}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={agent.status === 'active'}
+                    onCheckedChange={() => toggleStatus(agent)}
+                  />
+                  <Badge variant="secondary" className={statusColors[agent.status] || ''}>
+                    {agent.status === 'active' ? 'Ativo' : agent.status === 'paused' ? 'Pausado' : 'Inativo'}
+                  </Badge>
+                </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex gap-2 flex-wrap">

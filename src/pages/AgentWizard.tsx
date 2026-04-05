@@ -83,7 +83,7 @@ export default function AgentWizard() {
           user_id: user.id,
           name: wizardData.name,
           type: wizardData.type,
-          status: 'inactive',
+          status: 'active',
           device_id: wizardData.device_id,
           llm_provider: wizardData.llm_provider,
           llm_model: wizardData.llm_model,
