@@ -205,6 +205,10 @@ export default function NewBlastPage() {
                 <p className="text-xs text-destructive">Nenhum agente de prospecção encontrado</p>
               )}
             </div>
+            <div className="space-y-2">
+              <Label>Nome da campanha</Label>
+              <Input value={campaignName} onChange={e => setCampaignName(e.target.value)} placeholder="Ex: Campanha Janeiro" />
+            </div>
           </div>
 
           {blastPreview && (
@@ -223,11 +227,6 @@ export default function NewBlastPage() {
               </p>
             </div>
           )}
-            <div className="space-y-2">
-              <Label>Nome da campanha</Label>
-              <Input value={campaignName} onChange={e => setCampaignName(e.target.value)} placeholder="Ex: Campanha Janeiro" />
-            </div>
-          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
