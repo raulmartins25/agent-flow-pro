@@ -19,8 +19,13 @@ interface AgentWizardData {
   qualification_questions: Array<{
     id: string;
     question: string;
-    followup_media_url?: string;
-    followup_media_type?: string;
+    media?: {
+      offer_message: string;
+      file_url: string;
+      file_name: string;
+      file_type: 'image' | 'audio' | 'document' | 'video';
+      send_condition: 'positive_response' | 'always' | 'explicit_yes';
+    };
   }>;
   // Step 5
   objection_handlers: Array<{ objection: string; response: string }>;

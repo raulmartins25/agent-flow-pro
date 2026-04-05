@@ -131,19 +131,68 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       });
     }
 
-    // Save AI response
-    await supabase.from("messages").insert({
-      conversation_id,
-      role: "assistant",
-      content: aiResponse,
-    });
+    // --- SEND_MEDIA detection ---
+    const mediaRegex = /SEND_MEDIA:([a-f0-9-]+)/gi;
+    const mediaMatches = [...aiResponse.matchAll(mediaRegex)];
+    let cleanResponse = aiResponse.replace(mediaRegex, "").replace(/\s{2,}/g, " ").trim();
 
-    // Send via Evolution API using device credentials
-    await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", apikey: evoKey || "" },
-      body: JSON.stringify({ number: contact_number, text: aiResponse }),
-    });
+    for (const match of mediaMatches) {
+      const questionId = match[1];
+      if (!config?.qualification_questions) continue;
+
+      const qList = config.qualification_questions as any[];
+      const question = qList.find((q: any) => q.id === questionId);
+      if (!question?.media?.file_url) continue;
+
+      const media = question.media;
+
+      try {
+        if (media.file_type === "audio") {
+          await fetch(`${evoUrl}/message/sendWhatsAppAudio/${evoInstance}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: evoKey || "" },
+            body: JSON.stringify({ number: contact_number, audio: media.file_url }),
+          });
+        } else {
+          await fetch(`${evoUrl}/message/sendMedia/${evoInstance}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: evoKey || "" },
+            body: JSON.stringify({
+              number: contact_number,
+              mediatype: media.file_type,
+              media: media.file_url,
+              ...(media.file_type === "document" ? { fileName: media.file_name } : {}),
+            }),
+          });
+        }
+
+        await supabase.from("messages").insert({
+          conversation_id,
+          role: "assistant",
+          media_url: media.file_url,
+          media_type: media.file_type,
+          content: media.offer_message || null,
+        });
+      } catch (mediaErr) {
+        console.error("Error sending media:", mediaErr);
+      }
+    }
+
+    // Save AI text response
+    if (cleanResponse) {
+      await supabase.from("messages").insert({
+        conversation_id,
+        role: "assistant",
+        content: cleanResponse,
+      });
+
+      // Send text via Evolution API
+      await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: evoKey || "" },
+        body: JSON.stringify({ number: contact_number, text: cleanResponse }),
+      });
+    }
 
     // --- TRANSFER CHECK ---
     if (config?.qualification_questions && agentFull?.transfer_number) {
@@ -176,7 +225,7 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       }
     }
 
-    return new Response(JSON.stringify({ ok: true, response: aiResponse }), {
+    return new Response(JSON.stringify({ ok: true, response: cleanResponse || aiResponse }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
