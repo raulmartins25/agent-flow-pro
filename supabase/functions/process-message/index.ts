@@ -234,11 +234,24 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
 
     console.log(`Transfer check: tokenBased=${shouldTransfer}, programmatic: answered=${answeredQuestions}/${questions.length}, trigger=${transferTrigger}, transfer_number=${agentFull?.transfer_number}`);
 
-    if (!shouldTransfer && transferTrigger === "after_all_questions" 
+    // Check if conversation is already transferred — avoid duplicate transfers
+    const { data: convStatus } = await supabase
+      .from("conversations")
+      .select("status")
+      .eq("id", conversation_id)
+      .single();
+    const alreadyTransferred = convStatus?.status === "transferred";
+
+    if (!shouldTransfer && !alreadyTransferred && transferTrigger === "after_all_questions" 
         && questions.length > 0 && answeredQuestions >= questions.length 
         && agentFull?.transfer_number) {
       shouldTransfer = true;
       console.log("Transfer FORCED programmatically: all questions answered");
+    }
+
+    if (alreadyTransferred) {
+      shouldTransfer = false;
+      console.log("Skipping transfer: conversation already transferred");
     }
 
     if (shouldTransfer && agentFull?.transfer_number && device) {
@@ -262,7 +275,7 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
         summary = template
           .replace(/\{\{nome_contato\}\}/g, contactName)
           .replace(/\{\{telefone\}\}/g, contact_number)
-          .replace(/\{\{data\}\}/g, new Date().toLocaleString("pt-BR"))
+          .replace(/\{\{data\}\}/g, new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }))
           .replace(/\{\{agente\}\}/g, agentFull.name || "");
 
         questions.forEach((q: any, index: number) => {
@@ -278,7 +291,7 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
         summary = `*Novo lead qualificado* ✅\n\n`;
         summary += `*Nome:* ${contactName}\n`;
         summary += `*Telefone:* ${contact_number}\n`;
-        summary += `*Data:* ${new Date().toLocaleString("pt-BR")}\n`;
+        summary += `*Data:* ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}\n`;
         summary += `*Agente:* ${agentFull.name}\n\n`;
         summary += `*Respostas do lead:*\n\n${perguntasRespostas}`;
       }
