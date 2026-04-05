@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Bot, Plus, TestTube, Smartphone } from 'lucide-react';
+import { Bot, Plus, TestTube, Smartphone, Pencil } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -108,6 +108,11 @@ export default function Agents() {
                   )}
                 </div>
                 <div className="flex gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to={`/agents/${agent.id}/edit`}>
+                      <Pencil className="mr-1 h-3 w-3" />Editar
+                    </Link>
+                  </Button>
                   <Button variant="outline" size="sm" asChild>
                     <Link to={`/agents/${agent.id}/simulator`}>
                       <TestTube className="mr-1 h-3 w-3" />Simulador
