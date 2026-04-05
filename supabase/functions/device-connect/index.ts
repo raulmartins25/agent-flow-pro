@@ -8,18 +8,31 @@ const corsHeaders = {
 
 async function setWebhook(baseUrl: string, apiKey: string, instanceName: string) {
   const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/evolution-webhook`;
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
+
   try {
-    const res = await fetch(`${baseUrl}/webhook/set/${instanceName}`, {
+    const res = await fetch(`${normalizedBaseUrl}/webhook/set/${instanceName}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: apiKey },
       body: JSON.stringify({
-        url: webhookUrl,
-        webhook_by_events: false,
-        webhook_base64: false,
-        events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE", "MESSAGES_UPDATE"],
+        webhook: {
+          url: webhookUrl,
+          enabled: true,
+          webhookByEvents: false,
+          webhookBase64: false,
+          events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE", "MESSAGES_UPDATE"],
+        },
       }),
     });
-    console.log(`Webhook set for ${instanceName}: ${res.status}`);
+
+    const responseText = await res.text();
+
+    if (!res.ok) {
+      console.error(`Failed to set webhook for ${instanceName}: ${res.status} ${responseText}`);
+      return;
+    }
+
+    console.log(`Webhook set for ${instanceName}: ${res.status} ${responseText}`);
   } catch (e) {
     console.error("Failed to set webhook:", e);
   }
@@ -53,19 +66,17 @@ serve(async (req) => {
       });
     }
 
-    const baseUrl = device.evolution_api_url;
+    const baseUrl = device.evolution_api_url.replace(/\/+$/, "");
     const apiKey = device.evolution_api_key;
     const instanceName = device.instance_name;
 
     let qrCode = null;
 
-    // First try to get connection state
     const stateRes = await fetch(`${baseUrl}/instance/connectionState/${instanceName}`, {
       headers: { apikey: apiKey },
     });
 
     if (!stateRes.ok) {
-      // Instance may not exist, try to create it
       const createRes = await fetch(`${baseUrl}/instance/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: apiKey },
@@ -79,13 +90,11 @@ serve(async (req) => {
       if (createRes.ok) {
         const createData = await createRes.json();
         qrCode = createData?.qrcode?.base64 || createData?.base64 || null;
-        // Set webhook after creating instance
         await setWebhook(baseUrl, apiKey, instanceName);
       }
     } else {
       const stateData = await stateRes.json();
       if (stateData?.instance?.state === "open") {
-        // Already connected — set webhook and update
         await setWebhook(baseUrl, apiKey, instanceName);
 
         await supabase.from("devices").update({
@@ -100,7 +109,6 @@ serve(async (req) => {
       }
     }
 
-    // If not connected yet, request QR by calling connect
     if (!qrCode) {
       const connectRes = await fetch(`${baseUrl}/instance/connect/${instanceName}`, {
         headers: { apikey: apiKey },

@@ -8,18 +8,31 @@ const corsHeaders = {
 
 async function setWebhook(baseUrl: string, apiKey: string, instanceName: string) {
   const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/evolution-webhook`;
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
+
   try {
-    const res = await fetch(`${baseUrl}/webhook/set/${instanceName}`, {
+    const res = await fetch(`${normalizedBaseUrl}/webhook/set/${instanceName}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: apiKey },
       body: JSON.stringify({
-        url: webhookUrl,
-        webhook_by_events: false,
-        webhook_base64: false,
-        events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE", "MESSAGES_UPDATE"],
+        webhook: {
+          url: webhookUrl,
+          enabled: true,
+          webhookByEvents: false,
+          webhookBase64: false,
+          events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE", "MESSAGES_UPDATE"],
+        },
       }),
     });
-    console.log(`Webhook set for ${instanceName}: ${res.status}`);
+
+    const responseText = await res.text();
+
+    if (!res.ok) {
+      console.error(`Failed to set webhook for ${instanceName}: ${res.status} ${responseText}`);
+      return;
+    }
+
+    console.log(`Webhook set for ${instanceName}: ${res.status} ${responseText}`);
   } catch (e) {
     console.error("Failed to set webhook:", e);
   }
@@ -53,8 +66,9 @@ serve(async (req) => {
       });
     }
 
+    const baseUrl = device.evolution_api_url.replace(/\/+$/, "");
     const res = await fetch(
-      `${device.evolution_api_url}/instance/connectionState/${device.instance_name}`,
+      `${baseUrl}/instance/connectionState/${device.instance_name}`,
       { headers: { apikey: device.evolution_api_key } }
     );
 
@@ -69,14 +83,12 @@ serve(async (req) => {
     const state = data?.instance?.state;
 
     if (state === "open") {
-      // Auto-configure webhook when connected
-      await setWebhook(device.evolution_api_url, device.evolution_api_key, device.instance_name);
+      await setWebhook(baseUrl, device.evolution_api_key, device.instance_name);
 
-      // Try to get phone number from instance info
       let phoneNumber = device.phone_number;
       try {
         const infoRes = await fetch(
-          `${device.evolution_api_url}/instance/fetchInstances`,
+          `${baseUrl}/instance/fetchInstances`,
           { headers: { apikey: device.evolution_api_key } }
         );
         if (infoRes.ok) {
@@ -102,12 +114,12 @@ serve(async (req) => {
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-    } else {
-      await supabase.from("devices").update({ status: "disconnected" }).eq("id", device_id);
-      return new Response(JSON.stringify({ status: "disconnected" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
+
+    await supabase.from("devices").update({ status: "disconnected" }).eq("id", device_id);
+    return new Response(JSON.stringify({ status: "disconnected" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
     console.error("Device status error:", error);
     return new Response(JSON.stringify({ error: (error as Error).message }), {
