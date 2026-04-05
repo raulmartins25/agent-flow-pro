@@ -6,6 +6,69 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const normalizePhone = (value: string | null | undefined) => (value ?? "").replace(/\D/g, "");
+
+const buildTransferCandidates = (rawNumber: string) => {
+  const digits = normalizePhone(rawNumber);
+  const candidates = new Set<string>();
+
+  const add = (value: string | null | undefined) => {
+    const normalized = normalizePhone(value);
+    if (normalized.length >= 10 && normalized.length <= 13) {
+      candidates.add(normalized);
+    }
+  };
+
+  const addBrazilianVariants = (nationalNumber: string, withCountryCode: boolean) => {
+    if (nationalNumber.length !== 10 && nationalNumber.length !== 11) return;
+
+    const ddd = nationalNumber.slice(0, 2);
+    const local = nationalNumber.slice(2);
+    const compose = (localNumber: string) => withCountryCode ? `55${ddd}${localNumber}` : `${ddd}${localNumber}`;
+
+    add(compose(local));
+
+    if (local.length === 9 && local.startsWith("9")) {
+      add(compose(local.slice(1)));
+    }
+
+    if (local.length === 8) {
+      add(compose(`9${local}`));
+    }
+  };
+
+  add(digits);
+
+  if (digits.startsWith("55")) {
+    const national = digits.slice(2);
+    addBrazilianVariants(national, true);
+    addBrazilianVariants(national, false);
+  } else {
+    addBrazilianVariants(digits, false);
+    addBrazilianVariants(digits, true);
+  }
+
+  return Array.from(candidates);
+};
+
+const readTransferExistsFlag = (payloadText: string) => {
+  try {
+    const parsed = JSON.parse(payloadText);
+
+    if (typeof parsed?.exists === "boolean") {
+      return parsed.exists;
+    }
+
+    if (typeof parsed?.response?.message?.[0]?.exists === "boolean") {
+      return parsed.response.message[0].exists;
+    }
+  } catch (_) {
+    return null;
+  }
+
+  return null;
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -23,7 +86,6 @@ serve(async (req) => {
       });
     }
 
-    // Fetch agent with config and device
     const { data: agentFull } = await supabase
       .from("agents")
       .select("*, agent_config(*), devices(*)")
@@ -31,7 +93,18 @@ serve(async (req) => {
       .single();
 
     const config = agentFull?.agent_config?.[0] || null;
-    const device = agentFull?.devices || null;
+    const relatedDevice = agentFull?.devices;
+    let device = Array.isArray(relatedDevice) ? relatedDevice[0] || null : relatedDevice || null;
+
+    if (!device && device_id) {
+      const { data: fallbackDevice } = await supabase
+        .from("devices")
+        .select("*")
+        .eq("id", device_id)
+        .maybeSingle();
+
+      device = fallbackDevice || null;
+    }
 
     if (!device) {
       return new Response(JSON.stringify({ error: "No device linked to agent" }), {
@@ -43,12 +116,11 @@ serve(async (req) => {
     const evoKey = device.evolution_api_key;
     const evoInstance = device.instance_name;
 
-    // --- ANTI-BAN ---
     const lastUserMsg = [...history].reverse().find((m: any) => m.role === "user");
     if (lastUserMsg?.content && agentFull?.restrictions) {
-      const banTriggers = ['para', 'stop', 'me tira', 'não quero', 'denuncia', 'spam', 'me bloqueia'];
+      const banTriggers = ["para", "stop", "me tira", "não quero", "denuncia", "spam", "me bloqueia"];
       const msgLower = lastUserMsg.content.toLowerCase().trim();
-      const isBanTrigger = banTriggers.some(trigger => msgLower === trigger || msgLower.startsWith(trigger + ' '));
+      const isBanTrigger = banTriggers.some(trigger => msgLower === trigger || msgLower.startsWith(trigger + " "));
 
       if (isBanTrigger) {
         await supabase
@@ -75,10 +147,8 @@ serve(async (req) => {
       }
     }
 
-    // --- Build system prompt ---
     let systemPrompt = agent.prompt_compiled;
 
-    // Inject contact name dynamically
     const contactName = contact_name || "Contato";
     systemPrompt += `\n\nINFORMAÇÃO DO CONTATO:
 O nome do contato é: ${contactName} (obtido automaticamente do WhatsApp).
@@ -95,7 +165,6 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       }
     }
 
-    // --- Generate AI response ---
     const messages = [
       { role: "system", content: systemPrompt },
       ...history
@@ -124,7 +193,6 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       const data = await res.json();
       aiResponse = data.choices?.[0]?.message?.content || "";
     } else if (agent.llm_provider === "deepseek") {
-      // Map deprecated model names to current ones
       const modelMap: Record<string, string> = {
         "deepseek-v3": "deepseek-chat",
         "deepseek-v2": "deepseek-chat",
@@ -154,44 +222,41 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       });
     }
 
-    // --- TRANSFER_LEAD detection ---
-    const shouldTransfer = aiResponse.includes('TRANSFER_LEAD');
-    let cleanResponse = aiResponse.replace(/TRANSFER_LEAD/g, '').trim();
-    console.log(`Transfer check: shouldTransfer=${shouldTransfer}, transfer_number=${agentFull?.transfer_number}, contactName=${contactName}`);
+    const shouldTransfer = aiResponse.includes("TRANSFER_LEAD");
+    let cleanResponse = aiResponse.replace(/TRANSFER_LEAD/g, "").trim();
+    console.log(`Transfer check: shouldTransfer=${shouldTransfer}, transfer_number=${agentFull?.transfer_number}, contactName=${contactName}, sender_instance=${evoInstance}`);
 
     if (shouldTransfer && agentFull?.transfer_number && device) {
       console.log(`Enviando resumo para número de transferência: ${agentFull.transfer_number}`);
+      console.log(`Transferência sairá pelo device do agente ativo: ${device.name} (${evoInstance})`);
       console.log(`NÃO para o lead: ${contact_number}`);
       const userMessages = history.filter((m: any) => m.role === "user");
       const questions = (config?.qualification_questions as any[]) || [];
 
-      // Build perguntas_respostas block
-      let perguntasRespostas = '';
+      let perguntasRespostas = "";
       console.log(`Transfer mapping: ${questions.length} questions, ${userMessages.length} user messages, type=${agentFull.type}`);
       questions.forEach((q: any, index: number) => {
-        const offset = agentFull.type === 'prospecting' ? 1 : 0;
+        const offset = agentFull.type === "prospecting" ? 1 : 0;
         const answer = userMessages[index + offset];
-        console.log(`  Q${index + 1}: "${(q.question || '').substring(0, 50)}" → R: "${(answer?.content || 'Não respondida').substring(0, 50)}" (msg index=${index + offset})`);
-        perguntasRespostas += `*${index + 1}. ${q.question}*\n→ ${answer?.content || 'Não respondida'}\n`;
+        console.log(`  Q${index + 1}: "${(q.question || "").substring(0, 50)}" → R: "${(answer?.content || "Não respondida").substring(0, 50)}" (msg index=${index + offset})`);
+        perguntasRespostas += `*${index + 1}. ${q.question}*\n→ ${answer?.content || "Não respondida"}\n`;
       });
 
-      // Use template from agent_config if available, otherwise fallback
       const template = config?.transfer_summary_template;
       let summary: string;
       if (template) {
         summary = template
           .replace(/\{\{nome_contato\}\}/g, contactName)
           .replace(/\{\{telefone\}\}/g, contact_number)
-          .replace(/\{\{data\}\}/g, new Date().toLocaleString('pt-BR'))
-          .replace(/\{\{agente\}\}/g, agentFull.name || '');
+          .replace(/\{\{data\}\}/g, new Date().toLocaleString("pt-BR"))
+          .replace(/\{\{agente\}\}/g, agentFull.name || "");
 
-        // Replace individual {{pergunta_N}} and {{resposta_N}}
         questions.forEach((q: any, index: number) => {
           const num = index + 1;
-          const answer = userMessages[index + (agentFull.type === 'prospecting' ? 1 : 0)];
+          const answer = userMessages[index + (agentFull.type === "prospecting" ? 1 : 0)];
           summary = summary
-            .replace(new RegExp(`\\{\\{pergunta_${num}\\}\\}`, 'g'), q.question || '')
-            .replace(new RegExp(`\\{\\{resposta_${num}\\}\\}`, 'g'), answer?.content || 'Não respondida');
+            .replace(new RegExp(`\\{\\{pergunta_${num}\\}\\}`, "g"), q.question || "")
+            .replace(new RegExp(`\\{\\{resposta_${num}\\}\\}`, "g"), answer?.content || "Não respondida");
         });
 
         summary = summary.replace(/\{\{perguntas_respostas\}\}/g, perguntasRespostas.trim());
@@ -199,61 +264,56 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
         summary = `*Novo lead qualificado* ✅\n\n`;
         summary += `*Nome:* ${contactName}\n`;
         summary += `*Telefone:* ${contact_number}\n`;
-        summary += `*Data:* ${new Date().toLocaleString('pt-BR')}\n`;
+        summary += `*Data:* ${new Date().toLocaleString("pt-BR")}\n`;
         summary += `*Agente:* ${agentFull.name}\n\n`;
         summary += `*Respostas do lead:*\n\n${perguntasRespostas}`;
       }
-      console.log('Transfer summary:', summary.substring(0, 300));
+      console.log("Transfer summary:", summary.substring(0, 300));
 
       try {
-        const transferNum = agentFull.transfer_number.replace(/\D/g, '');
+        const transferNum = normalizePhone(agentFull.transfer_number);
         if (!transferNum) {
           throw new Error(`Invalid transfer number: ${agentFull.transfer_number}`);
         }
 
-        // Try multiple number formats for Brazilian numbers
-        const numbersToTry = [transferNum];
-        // If 13 digits (55 + 2-digit DDD + 9 + 8 digits), also try without the 9th digit
-        if (transferNum.length === 13 && transferNum.startsWith('55')) {
-          const without9 = transferNum.slice(0, 4) + transferNum.slice(5);
-          numbersToTry.push(without9);
-        }
-        // If 12 digits (55 + 2-digit DDD + 8 digits), also try with the 9th digit
-        if (transferNum.length === 12 && transferNum.startsWith('55')) {
-          const with9 = transferNum.slice(0, 4) + '9' + transferNum.slice(4);
-          numbersToTry.push(with9);
+        const numbersToTry = buildTransferCandidates(agentFull.transfer_number);
+        if (numbersToTry.length === 0) {
+          throw new Error(`No valid transfer candidates for: ${agentFull.transfer_number}`);
         }
 
+        console.log(`Transfer sender instance=${evoInstance}, candidates=${numbersToTry.join(", ")}`);
+
         let transferSuccess = false;
+        let lastTransferResponse = "";
+
         for (const numToTry of numbersToTry) {
-          console.log(`Trying transfer to: ${numToTry}`);
+          console.log(`Trying transfer from ${evoInstance} to: ${numToTry}`);
           const transferRes = await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
             method: "POST",
             headers: { "Content-Type": "application/json", apikey: evoKey || "" },
             body: JSON.stringify({ number: numToTry, text: summary }),
           });
           const transferResText = await transferRes.text();
-          console.log(`Evolution transfer response for ${numToTry}: status=${transferRes.status}, body=${transferResText.substring(0, 300)}`);
+          const existsFlag = readTransferExistsFlag(transferResText);
+          lastTransferResponse = `status=${transferRes.status}, exists=${String(existsFlag)}, body=${transferResText.substring(0, 300)}`;
+          console.log(`Evolution transfer response for ${numToTry}: ${lastTransferResponse}`);
 
-          if (transferRes.ok) {
-            // Check if the response indicates the number exists
-            try {
-              const resJson = JSON.parse(transferResText);
-              if (resJson.exists === false) {
-                console.log(`Number ${numToTry} does not exist on WhatsApp, trying next format...`);
-                continue;
-              }
-            } catch (_) { /* not JSON or no exists field, assume success */ }
+          if (transferRes.ok && existsFlag !== false) {
             transferSuccess = true;
             console.log(`Transfer succeeded to: ${numToTry}`);
             break;
-          } else {
-            console.log(`Transfer failed for ${numToTry}, trying next format...`);
           }
+
+          if (existsFlag === false) {
+            console.log(`Destination ${numToTry} not found on WhatsApp, trying next format...`);
+            continue;
+          }
+
+          console.log(`Transfer request failed for ${numToTry}, trying next format...`);
         }
 
         if (!transferSuccess) {
-          throw new Error(`All number formats failed for: ${transferNum}`);
+          throw new Error(`All transfer attempts failed for ${transferNum}. Last response: ${lastTransferResponse}`);
         }
 
         await supabase
@@ -267,7 +327,6 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       }
     }
 
-    // --- SEND_MEDIA detection ---
     const mediaRegex = /SEND_MEDIA:([a-f0-9-]+)/gi;
     const mediaMatches = [...cleanResponse.matchAll(mediaRegex)];
     cleanResponse = cleanResponse.replace(mediaRegex, "").replace(/\s{2,}/g, " ").trim();
@@ -314,7 +373,6 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       }
     }
 
-    // Save AI text response
     if (cleanResponse) {
       await supabase.from("messages").insert({
         conversation_id,
@@ -322,14 +380,12 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
         content: cleanResponse,
       });
 
-      // Send text via Evolution API
       await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: evoKey || "" },
         body: JSON.stringify({ number: contact_number, text: cleanResponse }),
       });
     }
-
 
     return new Response(JSON.stringify({ ok: true, response: cleanResponse || aiResponse }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
