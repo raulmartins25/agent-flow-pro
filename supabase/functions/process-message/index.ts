@@ -163,18 +163,32 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       const userMessages = history.filter((m: any) => m.role === "user");
       const questions = (config?.qualification_questions as any[]) || [];
 
-      let summary = `*Novo lead qualificado* ✅\n\n`;
-      summary += `*Nome:* ${contactName}\n`;
-      summary += `*Telefone:* ${contact_number}\n`;
-      summary += `*Data:* ${new Date().toLocaleString('pt-BR')}\n`;
-      summary += `*Agente:* ${agentFull.name}\n\n`;
-      summary += `*Respostas do lead:*\n`;
-
+      // Build perguntas_respostas block
+      let perguntasRespostas = '';
       questions.forEach((q: any, index: number) => {
         const answer = userMessages[index + (agentFull.type === 'prospecting' ? 1 : 0)];
-        summary += `\n*${index + 1}. ${q.question}*\n`;
-        summary += `→ ${answer?.content || 'Não respondida'}\n`;
+        perguntasRespostas += `*${index + 1}. ${q.question}*\n→ ${answer?.content || 'Não respondida'}\n`;
       });
+
+      // Use template from agent_config if available, otherwise fallback
+      const template = config?.transfer_summary_template;
+      let summary: string;
+      if (template) {
+        summary = template
+          .replace(/\{\{nome_contato\}\}/g, contactName)
+          .replace(/\{\{telefone\}\}/g, contact_number)
+          .replace(/\{\{data\}\}/g, new Date().toLocaleString('pt-BR'))
+          .replace(/\{\{agente\}\}/g, agentFull.name || '')
+          .replace(/\{\{perguntas_respostas\}\}/g, perguntasRespostas.trim());
+      } else {
+        summary = `*Novo lead qualificado* ✅\n\n`;
+        summary += `*Nome:* ${contactName}\n`;
+        summary += `*Telefone:* ${contact_number}\n`;
+        summary += `*Data:* ${new Date().toLocaleString('pt-BR')}\n`;
+        summary += `*Agente:* ${agentFull.name}\n\n`;
+        summary += `*Respostas do lead:*\n\n${perguntasRespostas}`;
+      }
+      console.log('Transfer summary:', summary.substring(0, 300));
 
       try {
         await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
