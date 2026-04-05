@@ -1,0 +1,1 @@
+ALTER TABLE public.conversations ADD COLUMN is_waiting_reply boolean NOT NULL DEFAULT false;
