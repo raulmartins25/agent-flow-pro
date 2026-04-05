@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Bot, Plus, Play, TestTube } from 'lucide-react';
+import { Bot, Plus, TestTube, Smartphone } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 export default function Agents() {
@@ -11,7 +11,7 @@ export default function Agents() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.from('agents').select('*').order('created_at', { ascending: false }).then(({ data, error }) => {
+    supabase.from('agents').select('*, devices(name, phone_number)').order('created_at', { ascending: false }).then(({ data, error }) => {
       if (error) console.error(error);
       setAgents(data ?? []);
       setLoading(false);
@@ -65,7 +65,16 @@ export default function Agents() {
                 </Badge>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Badge variant="outline">{typeLabels[agent.type] || agent.type}</Badge>
+                <div className="flex gap-2 flex-wrap">
+                  <Badge variant="outline">{typeLabels[agent.type] || agent.type}</Badge>
+                  {agent.devices && (
+                    <Badge variant="outline" className="gap-1">
+                      <Smartphone className="h-3 w-3" />
+                      {agent.devices.name}
+                      {agent.devices.phone_number && ` (${agent.devices.phone_number})`}
+                    </Badge>
+                  )}
+                </div>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" asChild>
                     <Link to={`/agents/${agent.id}/simulator`}>
