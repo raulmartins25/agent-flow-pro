@@ -155,8 +155,11 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
     // --- TRANSFER_LEAD detection ---
     const shouldTransfer = aiResponse.includes('TRANSFER_LEAD');
     let cleanResponse = aiResponse.replace(/TRANSFER_LEAD/g, '').trim();
+    console.log(`Transfer check: shouldTransfer=${shouldTransfer}, transfer_number=${agentFull?.transfer_number}, contactName=${contactName}`);
 
     if (shouldTransfer && agentFull?.transfer_number && device) {
+      console.log(`Enviando resumo para número de transferência: ${agentFull.transfer_number}`);
+      console.log(`NÃO para o lead: ${contact_number}`);
       const userMessages = history.filter((m: any) => m.role === "user");
       const questions = (config?.qualification_questions as any[]) || [];
 
