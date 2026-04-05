@@ -178,8 +178,18 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
           .replace(/\{\{nome_contato\}\}/g, contactName)
           .replace(/\{\{telefone\}\}/g, contact_number)
           .replace(/\{\{data\}\}/g, new Date().toLocaleString('pt-BR'))
-          .replace(/\{\{agente\}\}/g, agentFull.name || '')
-          .replace(/\{\{perguntas_respostas\}\}/g, perguntasRespostas.trim());
+          .replace(/\{\{agente\}\}/g, agentFull.name || '');
+
+        // Replace individual {{pergunta_N}} and {{resposta_N}}
+        questions.forEach((q: any, index: number) => {
+          const num = index + 1;
+          const answer = userMessages[index + (agentFull.type === 'prospecting' ? 1 : 0)];
+          summary = summary
+            .replace(new RegExp(`\\{\\{pergunta_${num}\\}\\}`, 'g'), q.question || '')
+            .replace(new RegExp(`\\{\\{resposta_${num}\\}\\}`, 'g'), answer?.content || 'Não respondida');
+        });
+
+        summary = summary.replace(/\{\{perguntas_respostas\}\}/g, perguntasRespostas.trim());
       } else {
         summary = `*Novo lead qualificado* ✅\n\n`;
         summary += `*Nome:* ${contactName}\n`;
