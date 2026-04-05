@@ -19,10 +19,11 @@ export function WizardStep6() {
   const needsApiKey = wizardData.llm_provider === 'openai' || wizardData.llm_provider === 'deepseek';
 
   const preview = wizardData.transfer_summary_template
-    .replace('{{nome_contato}}', 'João Silva')
-    .replace('{{telefone}}', '+5511999999999')
-    .replace('{{data}}', new Date().toLocaleDateString('pt-BR'))
-    .replace('{{perguntas_respostas}}', '1. Orçamento: R$5.000\n2. Prazo: 30 dias');
+    .replace(/\{\{nome_contato\}\}/g, 'João Silva')
+    .replace(/\{\{telefone\}\}/g, '+5511999999999')
+    .replace(/\{\{data\}\}/g, new Date().toLocaleDateString('pt-BR'))
+    .replace(/\{\{agente\}\}/g, wizardData.agent_persona_name || 'Meu Agente')
+    .replace(/\{\{perguntas_respostas\}\}/g, '1. Orçamento: R$5.000\n2. Prazo: 30 dias');
 
   return (
     <div className="space-y-6">
