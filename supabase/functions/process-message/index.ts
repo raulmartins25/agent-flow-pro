@@ -116,6 +116,80 @@ serve(async (req) => {
     const evoKey = device.evolution_api_key;
     const evoInstance = device.instance_name;
 
+    // --- Early return for already-transferred conversations ---
+    const { data: convCheck } = await supabase
+      .from("conversations")
+      .select("status")
+      .eq("id", conversation_id)
+      .single();
+
+    if (convCheck?.status === "transferred") {
+      console.log(`Conversation ${conversation_id} already transferred — using free-response mode`);
+
+      const personaName = config?.agent_persona_name || agentFull?.name || "Assistente";
+      const companyName = config?.company_name || "";
+      const freePrompt = `Você é ${personaName}${companyName ? ` da ${companyName}` : ""}. Esta conversa já foi encerrada e o lead foi transferido para nossa equipe. Responda de forma breve e cordial qualquer dúvida que o lead tiver, mas NÃO retome o fluxo de qualificação. NÃO faça perguntas de qualificação. NÃO emita TRANSFER_LEAD novamente. Se o lead perguntar sobre próximos passos, diga que a equipe entrará em contato em breve.`;
+
+      const recentHistory = history
+        .filter((m: any) => m.content && m.content.trim() !== "")
+        .slice(-10)
+        .map((m: any) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content }));
+
+      const freeMessages = [{ role: "system", content: freePrompt }, ...recentHistory];
+
+      let freeResponse = "";
+      if (agent.llm_provider === "claude") {
+        const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+        const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "google/gemini-2.5-flash", messages: freeMessages, stream: false }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          freeResponse = data.choices?.[0]?.message?.content || "";
+        }
+      } else if (agent.llm_provider === "openai") {
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${agent.llm_api_key}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: agent.llm_model || "gpt-4o", messages: freeMessages }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          freeResponse = data.choices?.[0]?.message?.content || "";
+        }
+      } else if (agent.llm_provider === "deepseek") {
+        const modelMap: Record<string, string> = { "deepseek-v3": "deepseek-chat", "deepseek-v2": "deepseek-chat" };
+        const actualModel = modelMap[agent.llm_model || "deepseek-chat"] || agent.llm_model || "deepseek-chat";
+        const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${agent.llm_api_key}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: actualModel, messages: freeMessages }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          freeResponse = data.choices?.[0]?.message?.content || "";
+        }
+      }
+
+      // Remove any accidental TRANSFER_LEAD tokens
+      freeResponse = freeResponse.replace(/TRANSFER_LEAD/g, "").trim();
+
+      if (freeResponse) {
+        await supabase.from("messages").insert({ conversation_id, role: "assistant", content: freeResponse });
+        await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", apikey: evoKey || "" },
+          body: JSON.stringify({ number: contact_number, text: freeResponse }),
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true, response: freeResponse, mode: "post_transfer" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const lastUserMsg = [...history].reverse().find((m: any) => m.role === "user");
     if (lastUserMsg?.content && agentFull?.restrictions) {
       const banTriggers = ["para", "stop", "me tira", "não quero", "denuncia", "spam", "me bloqueia"];
