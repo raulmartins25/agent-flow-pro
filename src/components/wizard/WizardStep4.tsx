@@ -85,7 +85,8 @@ export function WizardStep4() {
 
   const handleUpload = async (questionId: string, file: File) => {
     const fileType = getFileType(file);
-    const path = `${questionId}/${file.name}`;
+    const safeName = sanitizeFileName(file.name);
+    const path = `${questionId}/${safeName}`;
 
     setUploading((prev) => ({ ...prev, [questionId]: 0 }));
 
