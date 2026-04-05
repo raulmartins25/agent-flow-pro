@@ -1,57 +1,49 @@
 
 
-# Aquecimento de Chip — Menu e Página
+# Correção da Lógica de Prospecção — Usando `is_waiting_reply` boolean
 
-## Visão Geral
-Adicionar módulo "Aquecimento" na sidebar para conectar/desconectar instâncias WhatsApp via API do maturador (`automindhub.com.br`). Permite aquecer chips antes de usar nos agentes.
-
-## 1. Página `/warmup` (ChipWarmupPage.tsx)
-
-- Lista de instâncias conectadas para aquecimento (armazenadas localmente ou em nova tabela)
-- Dialog "Conectar Chip" com campos:
-  - **Provedor**: select com opções `evolution`, `uazapi`, `waha`
-  - **URL da API**: input text
-  - **Nome da instância**: input text (obrigatório para evolution/waha, opcional para uazapi)
-  - **Token**: input text (opcional para waha)
-- Botão **Conectar** → chama Edge Function que faz POST para `https://webhook.automindhub.com.br/webhook/jp-connect`
-- Botão **Desconectar** por instância → chama Edge Function que faz POST para `https://webhook.automindhub.com.br/webhook/jp-disconnect`
-- Exibe código/mensagem de retorno da API como toast
-
-## 2. Migração: tabela `chip_warmups`
+## 1. Migração SQL
+Adicionar coluna `is_waiting_reply boolean default false` à tabela `conversations`. Sem alterar enum.
 
 ```sql
-CREATE TABLE public.chip_warmups (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  provider text NOT NULL, -- evolution, uazapi, waha
-  api_url text NOT NULL,
-  instance_name text,
-  token text,
-  status text NOT NULL DEFAULT 'connected',
-  created_at timestamptz NOT NULL DEFAULT now()
-);
--- RLS: users manage own records
+ALTER TABLE public.conversations ADD COLUMN is_waiting_reply boolean NOT NULL DEFAULT false;
 ```
 
-## 3. Edge Function `chip-warmup`
+## 2. WizardStep3.tsx
+Ajustar placeholder para texto exato solicitado e label do preview para "Enviado por você via disparo". Já tem banner âmbar e diferenciação por tipo — apenas refinamentos textuais.
 
-- Aceita ações `connect` e `disconnect`
-- `connect`: POST para `jp-connect` com body `{ provider, url, instancia, token }`
-- `disconnect`: POST para `jp-disconnect` com body `{ url, instancia }`
-- Retorna código e mensagem da API ao frontend
+## 3. compilePrompt.ts
+Substituir bloco de prospecção pelo texto exato com `REGRAS CRÍTICAS` (não `IMPORTANTE`), incluindo "NUNCA diga 'como mencionei antes'", removendo regra de encerramento em 2 mensagens.
 
-## 4. Sidebar e Rota
+## 4. blast-processor/index.ts
+- Buscar `agent_persona_name` e `company_name` do `agent_config` para substituir `{{nome_agente}}` e `{{empresa}}`
+- Criar conversa com `status: 'active'`, `is_waiting_reply: true`, remover `agent_paused: true`
+- NÃO chamar process-message
 
-- Novo item: `{ title: 'Aquecimento', url: '/warmup', icon: Flame }` entre Disparos e Settings
-- Rota protegida `/warmup` no App.tsx
+## 5. evolution-webhook/index.ts
+- Ao encontrar conversa, verificar `is_waiting_reply`
+- Se `is_waiting_reply === true` e `!fromMe`:
+  - Atualizar `is_waiting_reply: false`
+  - Salvar mensagem do lead
+  - Chamar process-message
+  - Retornar
+- Manter lógica existente de `agent_paused` para pausa manual
+
+## 6. process-message/index.ts
+Atualizar texto da instrução especial para primeira resposta: "natural e calorosa", "não comece com 'Que ótimo!' ou 'Perfeito!'".
+
+## 7. NewBlastPage.tsx
+Completar substituição de `{{nome_agente}}` e `{{empresa}}` com valores reais do agent_config.
 
 ## Arquivos
 
-| Arquivo | Ação |
+| Arquivo | Mudança |
 |---|---|
-| Nova migração SQL | Tabela `chip_warmups` |
-| `src/pages/ChipWarmupPage.tsx` | **Novo** |
-| `supabase/functions/chip-warmup/index.ts` | **Novo** |
-| `src/components/AppSidebar.tsx` | Add menu item |
-| `src/App.tsx` | Add rota |
+| Nova migração SQL | `ALTER TABLE conversations ADD COLUMN is_waiting_reply` |
+| `src/components/wizard/WizardStep3.tsx` | Placeholder e label refinados |
+| `src/lib/compilePrompt.ts` | Bloco prospecção com texto exato |
+| `supabase/functions/blast-processor/index.ts` | `is_waiting_reply: true`, variáveis completas |
+| `supabase/functions/evolution-webhook/index.ts` | Detectar `is_waiting_reply` → false |
+| `supabase/functions/process-message/index.ts` | Instrução especial atualizada |
+| `src/pages/NewBlastPage.tsx` | Variáveis no preview com valores reais |
 
