@@ -1,61 +1,42 @@
 
 
-# Correção: IA repete perguntas + não transfere
+# Correção da Transferência — Nome do Contato + Logs
+
+## Problemas identificados
+
+1. **Resumo sem nome do contato** — O summary não inclui `contact_name`. O `process-message` não recebe nem busca esse dado da conversa.
+2. **pushName não atualizado em conversas existentes** — O webhook só salva `pushName` ao criar conversa nova (linha 129). Conversas existentes nunca recebem atualização do nome.
+3. **Prompt não menciona o nome do contato** — A IA não sabe o nome do lead para personalizar.
+
+**Nota**: O `number` no envio do resumo (linha 173) já usa `agentFull.transfer_number` corretamente. Não há bug aí.
+
+---
+
+## Correções
+
+### 1. `supabase/functions/evolution-webhook/index.ts`
+- Ao reutilizar conversa existente (bloco linha 107-119), atualizar `contact_name` com `pushName` se disponível e se o nome atual for genérico (igual ao número ou vazio)
+- Passar `contact_name` no payload enviado ao `process-message` (nos dois pontos onde chama: linha 187 e ~230)
+
+### 2. `supabase/functions/process-message/index.ts`
+- Receber `contact_name` do payload (já vem do webhook)
+- Se não vier, buscar da conversa no banco
+- Incluir `contact_name` no resumo de transferência: `*Nome:* ${contactName}`
+- Adicionar logs de debug no bloco de transferência
+
+### 3. `src/lib/compilePrompt.ts`
+- Não é possível incluir `contact_name` no prompt compilado em tempo de criação do agente — o nome varia por conversa
+- Em vez disso, adicionar no `process-message` uma instrução dinâmica ao system prompt antes de enviar à LLM:
+  `"O nome do contato é: {contact_name}. Use para personalizar, não pergunte o nome."`
+
+---
 
 ## Arquivos impactados
-- `src/lib/compilePrompt.ts` — prompt com controle de progresso e token TRANSFER_LEAD
-- `supabase/functions/process-message/index.ts` — detectar TRANSFER_LEAD e enviar resumo
 
----
+| Arquivo | Mudança |
+|---|---|
+| `supabase/functions/evolution-webhook/index.ts` | Atualizar contact_name com pushName + passar no payload |
+| `supabase/functions/process-message/index.ts` | Receber contact_name, incluir no resumo e no prompt dinâmico |
 
-## 1. compilePrompt.ts — Controle de progresso
-
-Adicionar bloco antes da lista de perguntas (tanto receptivo quanto prospecção):
-
-```
-CONTROLE DE PROGRESSO — OBRIGATÓRIO:
-Antes de fazer qualquer pergunta, verifique o histórico da conversa.
-Se a pergunta JÁ FOI FEITA e o lead JÁ RESPONDEU, marque como concluída e passe para a próxima não respondida.
-NUNCA repita uma pergunta que já foi respondida, mesmo após tratar uma objeção.
-Após resolver uma objeção, retome EXATAMENTE de onde parou — na próxima pergunta ainda não respondida.
-Ao receber cada resposta, internamente registre: "Pergunta N: RESPONDIDA".
-Sempre que for fazer uma pergunta, confirme que ela ainda não foi respondida.
-```
-
-## 2. compilePrompt.ts — Bloco de transferência
-
-Substituir o bloco "ENCERRAMENTO E TRANSFERÊNCIA" (linhas 123-125) por:
-
-```
-TRANSFERÊNCIA — PRIORIDADE MÁXIMA:
-Quando {trigger_text}, você DEVE:
-1. Enviar uma mensagem de encerramento calorosa e breve ao lead
-2. Incluir OBRIGATORIAMENTE na sua resposta o token exato: TRANSFER_LEAD
-3. PARAR completamente — não fazer mais nenhuma pergunta após emitir TRANSFER_LEAD
-4. Se o lead continuar respondendo após a transferência, responda apenas:
-   "Nossa equipe já tem suas informações e entrará em contato em breve!"
-
-IMPORTANTE: TRANSFER_LEAD deve aparecer em toda resposta de encerramento, sem exceção.
-```
-
-## 3. process-message/index.ts — Detectar TRANSFER_LEAD
-
-Após gerar `aiResponse` e antes do bloco SEND_MEDIA (linha ~149):
-
-1. Checar `aiResponse.includes('TRANSFER_LEAD')`
-2. Remover token do texto visível: `cleanResponse = aiResponse.replace(/TRANSFER_LEAD/g, '').trim()`
-3. Se `shouldTransfer`:
-   - Montar resumo com nome do contato, telefone, data, agente, e pares pergunta/resposta do histórico
-   - Enviar resumo para `agentFull.transfer_number` via Evolution API
-   - Atualizar conversa para `status: 'transferred'`
-   - Logar `Lead transferido para: {number}`
-4. Remover o bloco antigo de TRANSFER CHECK (linhas 212-241) — substituído pela detecção via token
-
----
-
-## Fluxo resultante
-1. IA recebe histórico → verifica quais perguntas já foram respondidas → faz só a próxima
-2. Quando todas respondidas → IA envia despedida + TRANSFER_LEAD
-3. process-message detecta token → envia resumo → marca conversa como transferred
-4. Se lead manda mais msgs após transferência → IA responde apenas "equipe entrará em contato"
+**Nota**: `compilePrompt.ts` não precisa mudar — o nome do contato é dinâmico por conversa, então a instrução vai direto no system prompt em runtime dentro do `process-message`.
 
