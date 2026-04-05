@@ -6,6 +6,25 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+async function setWebhook(baseUrl: string, apiKey: string, instanceName: string) {
+  const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/evolution-webhook`;
+  try {
+    const res = await fetch(`${baseUrl}/webhook/set/${instanceName}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: apiKey },
+      body: JSON.stringify({
+        url: webhookUrl,
+        webhook_by_events: false,
+        webhook_base64: false,
+        events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE", "MESSAGES_UPDATE"],
+      }),
+    });
+    console.log(`Webhook set for ${instanceName}: ${res.status}`);
+  } catch (e) {
+    console.error("Failed to set webhook:", e);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -38,7 +57,6 @@ serve(async (req) => {
     const apiKey = device.evolution_api_key;
     const instanceName = device.instance_name;
 
-    // Try to connect the instance (creates if not exists)
     let qrCode = null;
 
     // First try to get connection state
@@ -61,11 +79,15 @@ serve(async (req) => {
       if (createRes.ok) {
         const createData = await createRes.json();
         qrCode = createData?.qrcode?.base64 || createData?.base64 || null;
+        // Set webhook after creating instance
+        await setWebhook(baseUrl, apiKey, instanceName);
       }
     } else {
       const stateData = await stateRes.json();
       if (stateData?.instance?.state === "open") {
-        // Already connected
+        // Already connected — set webhook and update
+        await setWebhook(baseUrl, apiKey, instanceName);
+
         await supabase.from("devices").update({
           status: "connected",
           qr_code: null,

@@ -6,6 +6,25 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+async function setWebhook(baseUrl: string, apiKey: string, instanceName: string) {
+  const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/evolution-webhook`;
+  try {
+    const res = await fetch(`${baseUrl}/webhook/set/${instanceName}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: apiKey },
+      body: JSON.stringify({
+        url: webhookUrl,
+        webhook_by_events: false,
+        webhook_base64: false,
+        events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE", "MESSAGES_UPDATE"],
+      }),
+    });
+    console.log(`Webhook set for ${instanceName}: ${res.status}`);
+  } catch (e) {
+    console.error("Failed to set webhook:", e);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -50,6 +69,9 @@ serve(async (req) => {
     const state = data?.instance?.state;
 
     if (state === "open") {
+      // Auto-configure webhook when connected
+      await setWebhook(device.evolution_api_url, device.evolution_api_key, device.instance_name);
+
       // Try to get phone number from instance info
       let phoneNumber = device.phone_number;
       try {
