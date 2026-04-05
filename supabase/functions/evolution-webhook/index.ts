@@ -6,6 +6,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/** Normalize BR phone to canonical 13-digit format: 55 + 2-digit DDD + 9 + 8 digits */
+function canonicalPhone(raw: string): string {
+  let digits = raw.replace(/@.*$/, "").replace(/\D/g, "");
+  if (digits.startsWith("55") && digits.length === 12) {
+    digits = digits.slice(0, 4) + "9" + digits.slice(4);
+  }
+  return digits;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -14,7 +23,6 @@ serve(async (req) => {
     const event = body.event;
     const data = body.data;
 
-    // --- Resolve instanceName from string or object ---
     const rawInstance = body.instance;
     const instanceName = typeof rawInstance === "string"
       ? rawInstance
@@ -31,14 +39,15 @@ serve(async (req) => {
 
     if (event === "messages.upsert") {
       const msg = data;
-      const remoteJid = (msg.key?.remoteJid || "").replace("@s.whatsapp.net", "").replace("@g.us", "");
+      const rawJid = (msg.key?.remoteJid || "");
+      const remoteJid = canonicalPhone(rawJid);
       const fromMe = msg.key?.fromMe || false;
 
       const content = msg.message?.conversation ||
         msg.message?.extendedTextMessage?.text ||
         msg.message?.imageMessage?.caption || "";
 
-      console.log("Remote:", remoteJid, "FromMe:", fromMe, "Content:", content?.substring(0, 100));
+      console.log("Remote:", remoteJid, "(raw:", rawJid, ") FromMe:", fromMe, "Content:", content?.substring(0, 100));
 
       if (fromMe) {
         console.log("Ignorando mensagem própria (fromMe=true)");
@@ -51,7 +60,7 @@ serve(async (req) => {
         });
       }
 
-      // Find device by instance_name
+      // Find device
       const { data: device, error: deviceErr } = await supabase
         .from("devices")
         .select("*")
@@ -67,7 +76,7 @@ serve(async (req) => {
         });
       }
 
-      // Find active agent linked to this device
+      // Find active agent
       const { data: agent, error: agentErr } = await supabase
         .from("agents")
         .select("id, user_id, status, type, prompt_compiled, llm_provider, llm_model, llm_api_key, device_id")
@@ -83,33 +92,24 @@ serve(async (req) => {
         });
       }
 
-      // Find or create conversation scoped by agent_id + device_id
-      // Try exact match first, then with @s.whatsapp.net suffix as fallback
-      let { data: conversation } = await supabase
+      // --- RANKED conversation lookup ---
+      // Get all conversations for this agent+device+canonical phone
+      const { data: allConvs } = await supabase
         .from("conversations")
         .select("*")
         .eq("agent_id", agent.id)
         .eq("device_id", device.id)
         .eq("contact_number", remoteJid)
         .in("status", ["active", "paused"])
-        .single();
+        .order("created_at", { ascending: false });
 
-      if (!conversation) {
-        const { data: fallbackConv } = await supabase
-          .from("conversations")
-          .select("*")
-          .eq("agent_id", agent.id)
-          .eq("device_id", device.id)
-          .or(`contact_number.eq.${remoteJid}@s.whatsapp.net,contact_number.eq.${remoteJid}@g.us`)
-          .in("status", ["active", "paused"])
-          .single();
-        if (fallbackConv) {
-          // Normalize the stored number
-          await supabase.from("conversations").update({ contact_number: remoteJid }).eq("id", fallbackConv.id);
-          fallbackConv.contact_number = remoteJid;
-          conversation = fallbackConv;
-          console.log("Found conversation with suffix, normalized to:", remoteJid);
-        }
+      let conversation = null;
+
+      if (allConvs && allConvs.length > 0) {
+        // Prioritize: is_waiting_reply first, then most recent
+        const waitingConv = allConvs.find((c: any) => c.is_waiting_reply);
+        conversation = waitingConv || allConvs[0];
+        console.log("Using existing conversation:", conversation.id, "is_waiting_reply:", conversation.is_waiting_reply);
       }
 
       if (!conversation) {
@@ -127,8 +127,6 @@ serve(async (req) => {
           .single();
         conversation = newConv;
         console.log("Created new conversation:", newConv?.id);
-      } else {
-        console.log("Using existing conversation:", conversation.id);
       }
 
       if (!conversation) {
@@ -145,7 +143,7 @@ serve(async (req) => {
       else if (msg.message?.documentMessage) { mediaType = "document"; }
       else if (msg.message?.videoMessage) { mediaType = "video"; }
 
-      // --- PROSPECTING: Lead replied to blast (is_waiting_reply) ---
+      // --- PROSPECTING: Lead replied to blast ---
       if (!fromMe && conversation.is_waiting_reply) {
         console.log("Lead replied to blast, activating agent for conversation:", conversation.id);
         await supabase

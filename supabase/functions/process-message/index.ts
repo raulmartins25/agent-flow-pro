@@ -116,10 +116,19 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       const data = await res.json();
       aiResponse = data.choices?.[0]?.message?.content || "";
     } else if (agent.llm_provider === "deepseek") {
+      // Map deprecated model names to current ones
+      const modelMap: Record<string, string> = {
+        "deepseek-v3": "deepseek-chat",
+        "deepseek-v2": "deepseek-chat",
+      };
+      const requestedModel = agent.llm_model || "deepseek-chat";
+      const actualModel = modelMap[requestedModel] || requestedModel;
+      console.log(`DeepSeek: requested=${requestedModel}, using=${actualModel}`);
+
       const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${agent.llm_api_key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: agent.llm_model || "deepseek-chat", messages }),
+        body: JSON.stringify({ model: actualModel, messages }),
       });
       const resText = await res.text();
       console.log(`DeepSeek API: status=${res.status}, body=${resText.substring(0, 500)}`);
