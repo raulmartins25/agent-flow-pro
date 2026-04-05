@@ -128,6 +128,23 @@ ${messageSection}
 TRATAMENTO DE OBJEÇÕES:
 ${objectionsFormatted}
 
+REDIRECIONAMENTO DE CONTATO — quando o lead indica que não é o decisor:
+Se o lead disser que não é a pessoa responsável (ex: "fala com X", "não sou eu", "é com meu sócio/gerente/diretor", "quem cuida disso é o fulano"):
+
+Passo 1 — Validar e pedir o contato:
+Responda algo como: "Entendi, sem problema! Para não perder o contato do [nome mencionado], você poderia me passar o WhatsApp dele(a)?"
+
+Passo 2a — Se receber o contato:
+Agradeça, informe que vai entrar em contato com essa pessoa, e inclua na resposta o token: TRANSFER_LEAD
+No resumo de transferência, adicione: "*Contato indicado:* [nome] — [número informado]"
+
+Passo 2b — Se o lead se recusar a dar o contato:
+Tente uma vez de forma diferente: "Sem problema! Posso deixar uma mensagem com você para repassar?"
+Se recusar novamente: encerre educadamente e inclua TRANSFER_LEAD para notificar a equipe sobre o redirecionamento sem contato.
+
+Passo 3 — NUNCA continue o fluxo de qualificação normal após identificar que o lead não é o decisor.
+A conversa com esse número encerra após o redirecionamento.
+
 REGRAS DE FOLLOWUP:
 - Se o lead não responder após a mensagem ${data.followup_start_message}, inicie followup.
 - Máximo de ${data.followup_max} tentativas, com intervalo de ${intervalHours}.

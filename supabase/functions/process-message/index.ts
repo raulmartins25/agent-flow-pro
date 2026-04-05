@@ -297,6 +297,20 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
         summary += `*Agente:* ${agentFull.name}\n\n`;
         summary += `*Respostas do lead:*\n\n${perguntasRespostas}`;
       }
+      // Detect indicated contact from last user message
+      const lastUserMsg = userMessages[userMessages.length - 1]?.content || "";
+      const phoneMatch = lastUserMsg.match(/\d{8,15}/);
+      if (phoneMatch) {
+        summary += `\n*Contato indicado pelo lead:* ${phoneMatch[0]}`;
+        console.log(`Detected indicated contact phone: ${phoneMatch[0]}`);
+      }
+
+      const answeredQuestions = userMessages.length - (agentFull.type === "prospecting" ? 1 : 0);
+      if (answeredQuestions < questions.length / 2) {
+        summary += `\n*Observação:* Lead indicou que não é o decisor. Contato acima para follow-up.`;
+        console.log("Added non-decision-maker observation to summary");
+      }
+
       console.log("Transfer summary:", summary.substring(0, 300));
 
       try {
