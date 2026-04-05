@@ -98,7 +98,9 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
     // --- Generate AI response ---
     const messages = [
       { role: "system", content: systemPrompt },
-      ...history.map((m: any) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
+      ...history
+        .filter((m: any) => m.content && m.content.trim() !== "")
+        .map((m: any) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
     ];
 
     let aiResponse = "";

@@ -185,6 +185,7 @@ serve(async (req) => {
           .from("messages")
           .select("role, content")
           .eq("conversation_id", conversation.id)
+          .not("content", "is", null)
           .order("created_at", { ascending: true })
           .limit(50);
 
@@ -237,6 +238,7 @@ serve(async (req) => {
         .from("messages")
         .select("role, content")
         .eq("conversation_id", conversation.id)
+        .not("content", "is", null)
         .order("created_at", { ascending: true })
         .limit(50);
 
