@@ -1,51 +1,90 @@
 
+Objetivo: corrigir de forma definitiva os 2 problemas atuais sem mexer no que não está relacionado: agente não responde e o mesmo contato aparece duplicado no Inbox.
 
-# Diagnóstico: Agente não responde + Inbox vazio
+Diagnóstico confirmado
+- O Inbox não é a causa raiz: ele está apenas exibindo dados duplicados que já estão no banco.
+- Hoje o mesmo lead existe em 3 formatos diferentes:
+  - `5562995085665@s.whatsapp.net`
+  - `5562995085665`
+  - `556295085665`
+- Isso representa o mesmo número em formatos diferentes. O webhook chega em 12 dígitos, enquanto o disparo salva em 13 dígitos e/ou com sufixo.
+- Além disso, no reply do lead o webhook está pegando a conversa errada: ele usa a conversa antiga em 12 dígitos em vez da conversa mais recente com `is_waiting_reply = true`.
+- O agente não responde porque o `process-message` está chamando DeepSeek com `deepseek-v3`, e o log já mostra erro real: `400 Model Not Exist`.
 
-## Problemas encontrados (3 causas raiz)
+Plano de correção
 
-### 1. Formato de número incompatível entre Blast e Webhook
-O blast-processor salva `contact_number` como `5562995085665@s.whatsapp.net`. O webhook normaliza para `556295085665` (sem sufixo). Como os formatos não batem, o webhook **cria uma conversa NOVA** em vez de encontrar a do blast. A conversa original com `is_waiting_reply: true` nunca é atualizada.
+1. Padronizar telefone em um formato canônico
+- Arquivos:
+  - `supabase/functions/blast-processor/index.ts`
+  - `supabase/functions/evolution-webhook/index.ts`
+- Criar a mesma lógica de normalização nos dois fluxos:
+  - remover `@s.whatsapp.net` / `@g.us`
+  - remover caracteres não numéricos
+  - tratar a variação BR com/sem o 9 após o DDD
+- Definir um único formato interno para salvar e buscar conversas.
 
-**Evidência no banco:**
-- Conversa do blast: `5562995085665@s.whatsapp.net` (is_waiting_reply: true) — nunca tocada
-- Conversa do webhook: `556295085665` (is_waiting_reply: false) — criada do zero
+2. Corrigir a seleção da conversa no webhook
+- Arquivo: `supabase/functions/evolution-webhook/index.ts`
+- Trocar a busca atual por uma busca ranqueada, sem `.single()`.
+- Regra correta:
+  - procurar todas as conversas do mesmo `agent_id + device_id` que correspondam ao número canônico
+  - priorizar primeiro a conversa com `is_waiting_reply = true`
+  - se não houver, usar a conversa ativa/pausada mais recente
+  - só criar nova conversa se realmente não existir nenhuma equivalente
+- Isso corrige o caso atual em que o reply cai na conversa velha e deixa a conversa do disparo “órfã”.
 
-### 2. process-message retorna 500 (Empty AI response)
-O agente usa `deepseek` com modelo `deepseek-v3`. A chamada à API DeepSeek falha silenciosamente (retorna resposta vazia), e o código apenas retorna "Empty AI response" sem logar o erro. Resultado: a IA nunca responde.
+3. Parar de criar conversa duplicada a cada disparo
+- Arquivo: `supabase/functions/blast-processor/index.ts`
+- Antes de inserir nova conversa, buscar por conversa existente do mesmo `agent_id + device_id + número canônico`.
+- Se existir:
+  - reutilizar a conversa
+  - atualizar `contact_name` se vier melhor
+  - marcar `is_waiting_reply = true`
+  - atualizar `last_message_at`
+- Se não existir:
+  - criar normalmente
+- Assim um novo disparo para o mesmo lead não gera outra linha no Inbox.
 
-### 3. Inbox funciona, mas as conversas existem duplicadas
-A query e RLS estão corretas. As 2 conversas existem no banco. O inbox deve estar mostrando-as (ou o problema é que o `agents!inner` filtra por `user_id` mas o select não inclui esse filtro explícito — o RLS já cuida disso).
+4. Corrigir a chamada da LLM para o agente voltar a responder
+- Arquivo: `supabase/functions/process-message/index.ts`
+- Mapear o modelo salvo `deepseek-v3` para um modelo aceito pela API atual do DeepSeek (ex.: `deepseek-chat`) antes do fetch.
+- Manter o logging já adicionado.
+- Resultado esperado: o `process-message` deixa de retornar `Model Not Exist` e volta a gerar resposta.
 
----
+5. Limpar os dados já duplicados
+- Arquivo: nova migração SQL de reparo de dados
+- Fazer uma limpeza única das conversas já quebradas:
+  - identificar duplicadas por `agent_id + device_id + número canônico`
+  - escolher uma conversa principal
+  - mover as `messages` das duplicadas para a principal
+  - manter o melhor `contact_name` (ignorar `.` e vazio)
+  - recalcular `last_message_at`
+  - ajustar `is_waiting_reply` conforme o histórico já recebido
+  - remover/arquivar as duplicadas restantes
+- Isso elimina os contatos repetidos que já estão aparecendo hoje no Inbox.
 
-## Correções
+O que não precisa mudar
+- `InboxPage.tsx` não é a origem do bug.
+- RLS não é o problema neste caso.
+- Não precisa alterar o fluxo do agente receptivo.
 
-### A. `blast-processor/index.ts` — Normalizar contact_number
-- Ao criar a conversa, **remover o sufixo** `@s.whatsapp.net` e `@g.us` do `contact.phone` antes de salvar em `contact_number`
-- Isso garante que o formato bate com o que o webhook usa
+Ordem de execução
+1. Migração SQL de reparo dos dados atuais
+2. `blast-processor` com reuso de conversa e número canônico
+3. `evolution-webhook` com busca ranqueada priorizando `is_waiting_reply`
+4. `process-message` com correção do modelo DeepSeek
+5. Validação ponta a ponta
 
-### B. `evolution-webhook/index.ts` — Busca flexível
-- Ao buscar conversa existente, também tentar match com `contact_number + '@s.whatsapp.net'` como fallback
-- Ou normalizar ambos os lados para o mesmo formato (só dígitos)
+Validação final
+- Fazer novo disparo para o mesmo contato.
+- Confirmar que apenas 1 conversa permanece no Inbox.
+- Confirmar que o reply do lead entra na mesma conversa do disparo.
+- Confirmar que `is_waiting_reply` vira `false` após a resposta do lead.
+- Confirmar nos logs que o `process-message` não retorna mais `Model Not Exist`.
+- Confirmar que o agente responde normalmente sem afetar o agente receptivo.
 
-### C. `process-message/index.ts` — Logging e fallback do DeepSeek
-- Adicionar log do response body quando a API DeepSeek retorna resposta vazia
-- Verificar se `res.ok` antes de fazer parse do JSON
-- Logar claramente: provider, model, status code, response body (truncado)
-
-### D. Limpar dados duplicados
-- A conversa órfã do blast (`c11c94ae`, com `@s.whatsapp.net`) ficará sem uso. Não precisa de migração — basta que novos disparos usem o formato correto.
-
----
-
-## Arquivos impactados
-
-| Arquivo | Mudança |
-|---|---|
-| `supabase/functions/blast-processor/index.ts` | Strip `@s.whatsapp.net` do contact_number |
-| `supabase/functions/evolution-webhook/index.ts` | Busca flexível por contact_number |
-| `supabase/functions/process-message/index.ts` | Logging de erro na chamada DeepSeek |
-
-Sem migração SQL. Sem mudanças no frontend.
-
+Arquivos impactados
+- `supabase/functions/blast-processor/index.ts`
+- `supabase/functions/evolution-webhook/index.ts`
+- `supabase/functions/process-message/index.ts`
+- nova migração SQL de reparo de dados duplicados
