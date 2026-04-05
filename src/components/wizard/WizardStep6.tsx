@@ -95,7 +95,22 @@ export function WizardStep6() {
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label className="text-xs">Número WhatsApp de destino</Label>
-            <Input value={wizardData.transfer_number} onChange={(e) => updateWizardData({ transfer_number: e.target.value })} placeholder="+5511999999999" />
+            <Input
+              value={formatPhone(wizardData.transfer_number.replace(/\D/g, ''))}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/\D/g, '').slice(0, 13);
+                updateWizardData({ transfer_number: raw });
+              }}
+              placeholder="55 11 99999-9999"
+            />
+            {(() => {
+              const digits = wizardData.transfer_number.replace(/\D/g, '');
+              if (digits.length === 0) return null;
+              if (digits.length >= 12 && digits.length <= 13) {
+                return <p className="text-xs text-green-500 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Formato válido</p>;
+              }
+              return <p className="text-xs text-destructive flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Número incompleto — use: 55 + DDD + número</p>;
+            })()}
           </div>
           <div className="space-y-2">
             <Label className="text-xs">Gatilho de transferência</Label>
