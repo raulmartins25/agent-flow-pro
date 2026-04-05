@@ -57,35 +57,28 @@ export default function InboxPage() {
     });
   }, []);
 
+  const fetchConvs = async () => {
+    const { data } = await supabase
+      .from('conversations')
+      .select('*, agents!inner(name, user_id), devices(name)')
+      .order('last_message_at', { ascending: false });
+    setConversations((data as any[]) ?? []);
+    setLoading(false);
+  };
+
   // Load conversations
   useEffect(() => {
-    const fetchConvs = async () => {
-      const { data } = await supabase
-        .from('conversations')
-        .select('*, agents(name), devices(name)')
-        .order('last_message_at', { ascending: false });
-      setConversations((data as any[]) ?? []);
-      setLoading(false);
-    };
+    if (!user) return;
     fetchConvs();
 
     const channel = supabase
       .channel('conversations-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' },
-        (payload: RealtimePostgresChangesPayload<any>) => {
-          if (payload.eventType === 'UPDATE') {
-            setConversations(prev => prev.map(c => c.id === payload.new.id ? { ...c, ...payload.new } : c));
-            if (activeConv?.id === payload.new.id) {
-              setActiveConv(prev => prev ? { ...prev, ...payload.new } : prev);
-            }
-          } else if (payload.eventType === 'INSERT') {
-            setConversations(prev => [payload.new as any, ...prev]);
-          }
-        })
+        () => { fetchConvs(); })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [user]);
 
   // Load messages when conversation changes
   useEffect(() => {

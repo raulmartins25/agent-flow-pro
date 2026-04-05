@@ -13,10 +13,15 @@ serve(async (req) => {
     const body = await req.json();
     const event = body.event;
     const data = body.data;
-    const instance = body.instance;
+
+    // --- Resolve instanceName from string or object ---
+    const rawInstance = body.instance;
+    const instanceName = typeof rawInstance === "string"
+      ? rawInstance
+      : rawInstance?.instanceName || "";
 
     console.log("=== WEBHOOK RECEBIDO ===");
-    console.log("Event:", event, "Instance:", instance?.instanceName || "unknown");
+    console.log("Event:", event, "Instance:", instanceName || "unknown");
     console.log("Body:", JSON.stringify(body).substring(0, 500));
 
     const supabase = createClient(
@@ -26,45 +31,53 @@ serve(async (req) => {
 
     if (event === "messages.upsert") {
       const msg = data;
-      const remoteJid = msg.key?.remoteJid?.replace("@s.whatsapp.net", "") || "";
+      const remoteJid = (msg.key?.remoteJid || "").replace("@s.whatsapp.net", "").replace("@g.us", "");
       const fromMe = msg.key?.fromMe || false;
+
+      const content = msg.message?.conversation ||
+        msg.message?.extendedTextMessage?.text ||
+        msg.message?.imageMessage?.caption || "";
+
+      console.log("Remote:", remoteJid, "FromMe:", fromMe, "Content:", content?.substring(0, 100));
 
       if (fromMe) {
         console.log("Ignorando mensagem própria (fromMe=true)");
       }
 
-      const content = msg.message?.conversation ||
-        msg.message?.extendedTextMessage?.text ||
-        msg.message?.imageMessage?.caption || "";
-      const instanceName = instance?.instanceName || "";
-
-      console.log("Remote:", remoteJid, "FromMe:", fromMe, "Content:", content?.substring(0, 100));
+      if (!instanceName) {
+        console.log("instanceName vazio, ignorando");
+        return new Response(JSON.stringify({ ok: true, message: "No instance name" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
       // Find device by instance_name
-      const { data: device } = await supabase
+      const { data: device, error: deviceErr } = await supabase
         .from("devices")
         .select("*")
         .eq("instance_name", instanceName)
         .eq("status", "connected")
         .single();
 
+      console.log("Device lookup:", device ? `Found ${device.id} (${device.name})` : `Not found (${deviceErr?.message})`);
+
       if (!device) {
-        console.log("No device found for instance:", instanceName);
         return new Response(JSON.stringify({ ok: true, message: "No device found" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       // Find active agent linked to this device
-      const { data: agent } = await supabase
+      const { data: agent, error: agentErr } = await supabase
         .from("agents")
         .select("id, user_id, status, type, prompt_compiled, llm_provider, llm_model, llm_api_key, device_id")
         .eq("device_id", device.id)
         .eq("status", "active")
         .single();
 
+      console.log("Agent lookup:", agent ? `Found ${agent.id}` : `Not found (${agentErr?.message})`);
+
       if (!agent) {
-        console.log("No active agent for device:", device.id);
         return new Response(JSON.stringify({ ok: true, message: "No active agent for device" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -95,6 +108,8 @@ serve(async (req) => {
           .single();
         conversation = newConv;
         console.log("Created new conversation:", newConv?.id);
+      } else {
+        console.log("Using existing conversation:", conversation.id);
       }
 
       if (!conversation) {
