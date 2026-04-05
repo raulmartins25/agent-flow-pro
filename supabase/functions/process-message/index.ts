@@ -211,17 +211,49 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
           throw new Error(`Invalid transfer number: ${agentFull.transfer_number}`);
         }
 
-        console.log(`Sending to normalized transfer number: ${transferNum}`);
-        const transferRes = await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", apikey: evoKey || "" },
-          body: JSON.stringify({ number: transferNum, text: summary }),
-        });
-        const transferResText = await transferRes.text();
-        console.log(`Evolution transfer response: status=${transferRes.status}, body=${transferResText.substring(0, 300)}`);
+        // Try multiple number formats for Brazilian numbers
+        const numbersToTry = [transferNum];
+        // If 13 digits (55 + 2-digit DDD + 9 + 8 digits), also try without the 9th digit
+        if (transferNum.length === 13 && transferNum.startsWith('55')) {
+          const without9 = transferNum.slice(0, 4) + transferNum.slice(5);
+          numbersToTry.push(without9);
+        }
+        // If 12 digits (55 + 2-digit DDD + 8 digits), also try with the 9th digit
+        if (transferNum.length === 12 && transferNum.startsWith('55')) {
+          const with9 = transferNum.slice(0, 4) + '9' + transferNum.slice(4);
+          numbersToTry.push(with9);
+        }
 
-        if (!transferRes.ok) {
-          throw new Error(`Evolution transfer failed ${transferRes.status}: ${transferResText.substring(0, 300)}`);
+        let transferSuccess = false;
+        for (const numToTry of numbersToTry) {
+          console.log(`Trying transfer to: ${numToTry}`);
+          const transferRes = await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: evoKey || "" },
+            body: JSON.stringify({ number: numToTry, text: summary }),
+          });
+          const transferResText = await transferRes.text();
+          console.log(`Evolution transfer response for ${numToTry}: status=${transferRes.status}, body=${transferResText.substring(0, 300)}`);
+
+          if (transferRes.ok) {
+            // Check if the response indicates the number exists
+            try {
+              const resJson = JSON.parse(transferResText);
+              if (resJson.exists === false) {
+                console.log(`Number ${numToTry} does not exist on WhatsApp, trying next format...`);
+                continue;
+              }
+            } catch (_) { /* not JSON or no exists field, assume success */ }
+            transferSuccess = true;
+            console.log(`Transfer succeeded to: ${numToTry}`);
+            break;
+          } else {
+            console.log(`Transfer failed for ${numToTry}, trying next format...`);
+          }
+        }
+
+        if (!transferSuccess) {
+          throw new Error(`All number formats failed for: ${transferNum}`);
         }
 
         await supabase
