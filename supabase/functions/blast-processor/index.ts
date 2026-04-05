@@ -6,6 +6,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/** Normalize BR phone to canonical 13-digit format: 55 + 2-digit DDD + 9 + 8 digits */
+function canonicalPhone(raw: string): string {
+  let digits = raw.replace(/@.*$/, "").replace(/\D/g, "");
+  // If starts with 55 and has 12 digits (missing the 9), insert it
+  if (digits.startsWith("55") && digits.length === 12) {
+    digits = digits.slice(0, 4) + "9" + digits.slice(4);
+  }
+  return digits;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -103,20 +113,51 @@ serve(async (req) => {
         );
 
         if (res.ok) {
-          const normalizedPhone = contact.phone.replace(/@s\.whatsapp\.net$/, "").replace(/@g\.us$/, "");
-          const { data: conversation } = await supabase
+          const normalizedPhone = canonicalPhone(contact.phone);
+
+          // --- REUSE existing conversation for same agent+device+phone ---
+          const { data: existingConvs } = await supabase
             .from("conversations")
-            .insert({
-              agent_id: agent.id,
-              device_id: device.id,
-              instance_name: device.instance_name,
-              contact_number: normalizedPhone,
-              contact_name: contact.name || contact.phone,
-              status: "active",
-              is_waiting_reply: true,
-            })
-            .select()
-            .single();
+            .select("*")
+            .eq("agent_id", agent.id)
+            .eq("device_id", device.id)
+            .eq("contact_number", normalizedPhone)
+            .in("status", ["active", "paused"])
+            .order("created_at", { ascending: false })
+            .limit(1);
+
+          let conversation = existingConvs?.[0] || null;
+
+          if (conversation) {
+            // Reuse: update metadata
+            await supabase
+              .from("conversations")
+              .update({
+                is_waiting_reply: true,
+                last_message_at: new Date().toISOString(),
+                status: "active",
+                ...(contact.name && contact.name !== "." ? { contact_name: contact.name } : {}),
+              })
+              .eq("id", conversation.id);
+            console.log("Reusing conversation:", conversation.id, "for", normalizedPhone);
+          } else {
+            // Create new
+            const { data: newConv } = await supabase
+              .from("conversations")
+              .insert({
+                agent_id: agent.id,
+                device_id: device.id,
+                instance_name: device.instance_name,
+                contact_number: normalizedPhone,
+                contact_name: contact.name || contact.phone,
+                status: "active",
+                is_waiting_reply: true,
+              })
+              .select()
+              .single();
+            conversation = newConv;
+            console.log("Created conversation:", conversation?.id, "for", normalizedPhone);
+          }
 
           if (conversation) {
             await supabase.from("messages").insert({
