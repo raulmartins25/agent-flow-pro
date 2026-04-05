@@ -165,8 +165,11 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
 
       // Build perguntas_respostas block
       let perguntasRespostas = '';
+      console.log(`Transfer mapping: ${questions.length} questions, ${userMessages.length} user messages, type=${agentFull.type}`);
       questions.forEach((q: any, index: number) => {
-        const answer = userMessages[index + (agentFull.type === 'prospecting' ? 1 : 0)];
+        const offset = agentFull.type === 'prospecting' ? 1 : 0;
+        const answer = userMessages[index + offset];
+        console.log(`  Q${index + 1}: "${(q.question || '').substring(0, 50)}" → R: "${(answer?.content || 'Não respondida').substring(0, 50)}" (msg index=${index + offset})`);
         perguntasRespostas += `*${index + 1}. ${q.question}*\n→ ${answer?.content || 'Não respondida'}\n`;
       });
 
