@@ -191,12 +191,15 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       console.log('Transfer summary:', summary.substring(0, 300));
 
       try {
-        await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
+        const transferNum = agentFull.transfer_number.replace(/\+/g, '');
+        console.log(`Sending to normalized transfer number: ${transferNum}`);
+        const transferRes = await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
           method: "POST",
           headers: { "Content-Type": "application/json", apikey: evoKey || "" },
-          body: JSON.stringify({ number: agentFull.transfer_number, text: summary }),
+          body: JSON.stringify({ number: transferNum, text: summary }),
         });
-        console.log(`Lead transferido para: ${agentFull.transfer_number}`);
+        const transferResText = await transferRes.text();
+        console.log(`Evolution transfer response: status=${transferRes.status}, body=${transferResText.substring(0, 300)}`);
       } catch (transferErr) {
         console.error("Error sending transfer summary:", transferErr);
       }
