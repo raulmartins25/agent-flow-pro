@@ -1,50 +1,36 @@
 
 
-# Correção: IA para de responder após envio de mídia
+# Formatar Campo de Número de Transferência
 
-## Diagnóstico
-
-Os logs mostram o erro exato:
-
-```
-DeepSeek API error 400: "Invalid assistant message: content or tool_calls must be set"
-```
-
-**Causa raiz**: Quando a IA envia mídia (`SEND_MEDIA:xxx`), o código salva a mensagem de mídia no banco com `content: media.offer_message || null`. Na próxima interação, o webhook busca o histórico (`select role, content`) e envia mensagens com `content: null` para a DeepSeek. A DeepSeek rejeita mensagens de assistant com content vazio/null.
+## Problema
+O campo aceita qualquer formato (ex: `+5562997274903`), mas a Evolution API precisa apenas dos dígitos. Além disso, o usuário não sabe qual formato usar.
 
 ## Solução
 
-### 1. `supabase/functions/process-message/index.ts` — Filtrar histórico
+### `src/components/wizard/WizardStep6.tsx`
 
-Na construção do array `messages` (linha 99-102), filtrar mensagens com content vazio/null:
+1. **Máscara de input** — Ao digitar, auto-formatar para o padrão `55 62 99727-4903` (código país + DDD + número)
+2. **Validação visual** — Mostrar indicador verde/vermelho se o número tem entre 12-13 dígitos (após remover não-dígitos)
+3. **Placeholder claro** — `55 11 99999-9999`
+4. **Hint text** — "Digite: código do país (55) + DDD + número, sem +"
+5. **Auto-strip no onChange** — Salvar no store apenas os dígitos puros (sem espaços, traços ou +), já que o backend faz `replace(/\D/g, '')` de qualquer forma
 
-```typescript
-const messages = [
-  { role: "system", content: systemPrompt },
-  ...history
-    .filter((m: any) => m.content && m.content.trim() !== "")
-    .map((m: any) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
-];
+### Lógica do onChange
+```
+const raw = e.target.value.replace(/\D/g, '').slice(0, 13);
+updateWizardData({ transfer_number: raw });
 ```
 
-### 2. `supabase/functions/evolution-webhook/index.ts` — Buscar content não-nulo
+### Display formatado
+Mostrar o número formatado visualmente (`55 62 99727-4903`) usando uma função de formatação, mas armazenar apenas dígitos.
 
-Na query de histórico (linhas 184-189 e similar no bloco principal), adicionar filtro:
+### Validação
+- < 12 dígitos: texto vermelho "Número incompleto"
+- 12-13 dígitos: texto verde "✓ Formato válido"
 
-```typescript
-.select("role, content")
-.eq("conversation_id", conversation.id)
-.not("content", "is", null)
-.order("created_at", { ascending: true })
-.limit(50);
-```
-
-Isso garante que mensagens de mídia sem texto não entrem no histórico enviado à IA.
-
-## Arquivos impactados
+## Arquivo impactado
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/functions/process-message/index.ts` | Filtrar mensagens com content null/vazio antes de enviar à IA |
-| `supabase/functions/evolution-webhook/index.ts` | Excluir mensagens sem content da query de histórico |
+| `src/components/wizard/WizardStep6.tsx` | Máscara, validação visual e armazenamento limpo do número |
 
