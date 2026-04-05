@@ -191,7 +191,11 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       console.log('Transfer summary:', summary.substring(0, 300));
 
       try {
-        const transferNum = agentFull.transfer_number.replace(/\+/g, '');
+        const transferNum = agentFull.transfer_number.replace(/\D/g, '');
+        if (!transferNum) {
+          throw new Error(`Invalid transfer number: ${agentFull.transfer_number}`);
+        }
+
         console.log(`Sending to normalized transfer number: ${transferNum}`);
         const transferRes = await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
           method: "POST",
@@ -200,14 +204,20 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
         });
         const transferResText = await transferRes.text();
         console.log(`Evolution transfer response: status=${transferRes.status}, body=${transferResText.substring(0, 300)}`);
+
+        if (!transferRes.ok) {
+          throw new Error(`Evolution transfer failed ${transferRes.status}: ${transferResText.substring(0, 300)}`);
+        }
+
+        await supabase
+          .from("conversations")
+          .update({ status: "transferred" })
+          .eq("id", conversation_id);
+
+        console.log(`Lead transferido para: ${transferNum}`);
       } catch (transferErr) {
         console.error("Error sending transfer summary:", transferErr);
       }
-
-      await supabase
-        .from("conversations")
-        .update({ status: "transferred" })
-        .eq("id", conversation_id);
     }
 
     // --- SEND_MEDIA detection ---
