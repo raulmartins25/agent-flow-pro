@@ -20,6 +20,7 @@ import PublicSimulatorPage from "@/pages/PublicSimulatorPage";
 import SettingsPage from "@/pages/SettingsPage";
 import ChipWarmupPage from "@/pages/ChipWarmupPage";
 import DevicesPage from "@/pages/DevicesPage";
+import LogsPage from "@/pages/LogsPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -49,6 +50,7 @@ const App = () => (
               <Route path="/blasts/new" element={<NewBlastPage />} />
               <Route path="/blasts/:id" element={<BlastDetailPage />} />
               <Route path="/warmup" element={<ChipWarmupPage />} />
+              <Route path="/logs" element={<LogsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
