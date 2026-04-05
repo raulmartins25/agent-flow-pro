@@ -104,6 +104,8 @@ serve(async (req) => {
 
       let conversation = null;
 
+      const contactName = msg.pushName || rawJid.split("@")[0] || "Contato";
+
       if (allConvs && allConvs.length > 0) {
         // Prioritize: is_waiting_reply first, then active/paused, then any
         const waitingConv = allConvs.find((c: any) => c.is_waiting_reply);
@@ -111,11 +113,20 @@ serve(async (req) => {
         conversation = waitingConv || activeConv || allConvs[0];
         
         // Reactivate if transferred/closed
+        const updates: any = {};
         if (conversation.status === "transferred" || conversation.status === "closed") {
-          await supabase.from("conversations").update({ status: "active" }).eq("id", conversation.id);
+          updates.status = "active";
           conversation.status = "active";
         }
-        console.log("Using existing conversation:", conversation.id, "status:", conversation.status, "is_waiting_reply:", conversation.is_waiting_reply);
+        // Update contact_name if current is generic or empty
+        if (msg.pushName && (!conversation.contact_name || conversation.contact_name === conversation.contact_number)) {
+          updates.contact_name = contactName;
+          conversation.contact_name = contactName;
+        }
+        if (Object.keys(updates).length > 0) {
+          await supabase.from("conversations").update(updates).eq("id", conversation.id);
+        }
+        console.log("Using existing conversation:", conversation.id, "status:", conversation.status, "contact_name:", conversation.contact_name);
       }
 
       if (!conversation) {
@@ -126,7 +137,7 @@ serve(async (req) => {
             device_id: device.id,
             instance_name: instanceName,
             contact_number: remoteJid,
-            contact_name: msg.pushName || remoteJid,
+            contact_name: contactName,
             status: "active",
           })
           .select()
@@ -189,6 +200,7 @@ serve(async (req) => {
             agent,
             history: history || [],
             contact_number: remoteJid,
+            contact_name: conversation.contact_name || contactName,
             instance_name: instanceName,
             device_id: device.id,
           }),
@@ -240,6 +252,7 @@ serve(async (req) => {
           agent,
           history: history || [],
           contact_number: remoteJid,
+          contact_name: conversation.contact_name || contactName,
           instance_name: instanceName,
           device_id: device.id,
         }),

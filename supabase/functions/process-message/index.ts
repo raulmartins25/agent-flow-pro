@@ -10,7 +10,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { conversation_id, agent, history, contact_number, device_id } = await req.json();
+    const { conversation_id, agent, history, contact_number, device_id, contact_name } = await req.json();
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -77,6 +77,12 @@ serve(async (req) => {
 
     // --- Build system prompt ---
     let systemPrompt = agent.prompt_compiled;
+
+    // Inject contact name dynamically
+    const contactName = contact_name || "Contato";
+    systemPrompt += `\n\nINFORMAÇÃO DO CONTATO:
+O nome do contato é: ${contactName} (obtido automaticamente do WhatsApp).
+Use este nome para personalizar as mensagens de forma natural, mas NÃO pergunte o nome do lead.`;
 
     if (agentFull?.type === "prospecting") {
       const userMessages = history.filter((m: any) => m.role === "user");
@@ -149,12 +155,16 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
     // --- TRANSFER_LEAD detection ---
     const shouldTransfer = aiResponse.includes('TRANSFER_LEAD');
     let cleanResponse = aiResponse.replace(/TRANSFER_LEAD/g, '').trim();
+    console.log(`Transfer check: shouldTransfer=${shouldTransfer}, transfer_number=${agentFull?.transfer_number}, contactName=${contactName}`);
 
     if (shouldTransfer && agentFull?.transfer_number && device) {
+      console.log(`Enviando resumo para número de transferência: ${agentFull.transfer_number}`);
+      console.log(`NÃO para o lead: ${contact_number}`);
       const userMessages = history.filter((m: any) => m.role === "user");
       const questions = (config?.qualification_questions as any[]) || [];
 
       let summary = `*Novo lead qualificado* ✅\n\n`;
+      summary += `*Nome:* ${contactName}\n`;
       summary += `*Telefone:* ${contact_number}\n`;
       summary += `*Data:* ${new Date().toLocaleString('pt-BR')}\n`;
       summary += `*Agente:* ${agentFull.name}\n\n`;
