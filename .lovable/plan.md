@@ -1,41 +1,41 @@
 
 
-# Corrigir Transferência Não Entregue
+# Melhorar Stepper do Wizard — Visual + Navegação
 
-## Diagnóstico
-Os logs mostram que o código de transferência **executou sem erro** ("Lead transferido para: +5562997274903"), mas a mensagem não chegou no WhatsApp. Duas causas:
+## Problema
+O stepper atual tem tamanhos inconsistentes entre os steps, visual básico, e só permite clicar em steps anteriores.
 
-1. **Formato do número** — O `transfer_number` está salvo como `+5562997274903` (com `+`). A Evolution API espera números sem `+`. Todas as outras chamadas da Evolution (envio ao lead) usam números normalizados sem `+`, mas o `transfer_number` vem direto do campo configurado pelo usuário.
+## Solução
 
-2. **Resposta da Evolution API ignorada** — O `fetch` não verifica o `response.status` nem loga o body de retorno. Se a API retornar erro (ex: número inválido), o sistema simplesmente ignora.
+### `src/pages/AgentWizard.tsx` — Redesenhar o stepper
 
-## Correções
+Substituir o bloco do stepper (linhas 256-268) por um design mais polido:
 
-### 1. `supabase/functions/process-message/index.ts`
-- Normalizar `transfer_number` removendo `+` antes de enviar: `agentFull.transfer_number.replace(/\+/g, '')`
-- Logar a resposta da Evolution API (status + body) para diagnóstico
-- Aplicar a mesma normalização em qualquer outro ponto que use `transfer_number`
+- **Tamanho uniforme**: cada step ocupa espaço igual (`flex-1`)
+- **Navegação livre**: permitir clicar em qualquer step (não só anteriores)
+- **Visual melhorado**:
+  - Número em círculo fixo (32x32px) com cores distintas por estado
+  - Step atual: círculo preenchido com primary, ring/glow sutil
+  - Steps completos: círculo com check icon, fundo primary/20
+  - Steps futuros: círculo muted com número
+  - Linha conectora entre os círculos (barra horizontal)
+  - Título sempre visível abaixo do círculo (truncado se necessário)
+- **Hover**: todos os steps têm hover effect indicando clicabilidade
 
-```typescript
-// Antes do fetch:
-const transferNum = agentFull.transfer_number.replace(/\+/g, '');
-console.log(`Sending to normalized transfer number: ${transferNum}`);
-
-const transferRes = await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json", apikey: evoKey || "" },
-  body: JSON.stringify({ number: transferNum, text: summary }),
-});
-const transferResText = await transferRes.text();
-console.log(`Evolution transfer response: status=${transferRes.status}, body=${transferResText.substring(0, 300)}`);
+```
+  [1 ✓]——[2 ✓]——[● 3]——[4]——[5]——[6]
+  Tipo    Ident  Msg   Qual  Obj   LLM
 ```
 
-### 2. Nenhuma mudança no frontend
-O campo `transfer_number` no wizard aceita qualquer formato — a normalização acontece no backend.
+### Detalhes técnicos
+- Cada step: `button` com `onClick={() => setCurrentStep(i)}` (sem restrição de direção)
+- Círculo: `w-8 h-8 rounded-full flex items-center justify-center`
+- Linha conectora: `div` com `flex-1 h-0.5 bg-primary/20` (ou `bg-primary` se completo)
+- Step completo: mostrar `Check` icon do lucide em vez do número
+- Responsivo: títulos visíveis em desktop, ocultos em mobile (só círculos)
 
-## Arquivos impactados
-
+### Arquivo impactado
 | Arquivo | Mudança |
 |---|---|
-| `supabase/functions/process-message/index.ts` | Normalizar número + logar resposta da Evolution API |
+| `src/pages/AgentWizard.tsx` | Redesenhar stepper com tamanho uniforme, navegação livre, visual melhorado |
 
