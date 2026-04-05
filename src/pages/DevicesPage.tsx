@@ -13,7 +13,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Smartphone, Plus, Wifi, WifiOff, QrCode, Trash2, RefreshCw, Bot } from 'lucide-react';
+import { Smartphone, Plus, Wifi, WifiOff, QrCode, Trash2, RefreshCw, Bot, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Device = {
@@ -47,6 +47,8 @@ export default function DevicesPage() {
   const [form, setForm] = useState({ name: '', evolution_api_url: '', evolution_api_key: '', instance_name: '' });
   const [saving, setSaving] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [webhookInfo, setWebhookInfo] = useState<{ current_url: string | null; expected_url: string; is_correct: boolean } | null>(null);
+  const [checkingWebhook, setCheckingWebhook] = useState(false);
 
   const fetchDevices = async () => {
     const { data } = await supabase.from('devices').select('*').order('created_at', { ascending: false });
@@ -310,6 +312,28 @@ export default function DevicesPage() {
                   ))}
                 </div>
               )}
+
+              <div className="border-t pt-3 space-y-2">
+                <Button variant="outline" size="sm" disabled={checkingWebhook} onClick={async () => {
+                  setCheckingWebhook(true);
+                  setWebhookInfo(null);
+                  try {
+                    const res = await supabase.functions.invoke('check-webhook', { body: { device_id: manageDevice.id } });
+                    if (res.data) setWebhookInfo(res.data);
+                    else toast.error('Erro ao verificar webhook');
+                  } catch { toast.error('Erro ao verificar'); }
+                  setCheckingWebhook(false);
+                }}>
+                  <Search className="mr-1 h-3 w-3" />{checkingWebhook ? 'Verificando...' : 'Verificar webhook'}
+                </Button>
+                {webhookInfo && (
+                  <div className={`text-xs p-2 rounded border ${webhookInfo.is_correct ? 'border-green-500/30 bg-green-500/10' : 'border-red-500/30 bg-red-500/10'}`}>
+                    <p><strong>Status:</strong> {webhookInfo.is_correct ? '✅ Configurado corretamente' : '❌ Incorreto ou ausente'}</p>
+                    <p className="truncate"><strong>URL atual:</strong> {webhookInfo.current_url || 'Nenhuma'}</p>
+                    {!webhookInfo.is_correct && <p className="truncate"><strong>Esperado:</strong> {webhookInfo.expected_url}</p>}
+                  </div>
+                )}
+              </div>
 
               <Button variant="destructive" size="sm"
                 onClick={() => { setDeleteDevice(manageDevice); setManageDevice(null); }}>
