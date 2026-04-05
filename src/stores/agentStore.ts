@@ -44,9 +44,11 @@ interface AgentWizardData {
 
 interface AgentStore {
   wizardData: AgentWizardData;
+  editingAgentId: string | null;
   currentStep: number;
   setCurrentStep: (step: number) => void;
   updateWizardData: (data: Partial<AgentWizardData>) => void;
+  loadWizardData: (data: Partial<AgentWizardData>, agentId: string) => void;
   resetWizard: () => void;
 }
 
@@ -82,10 +84,16 @@ const initialWizardData: AgentWizardData = {
 
 export const useAgentStore = create<AgentStore>((set) => ({
   wizardData: { ...initialWizardData },
+  editingAgentId: null,
   currentStep: 0,
   setCurrentStep: (step) => set({ currentStep: step }),
   updateWizardData: (data) => set((state) => ({
     wizardData: { ...state.wizardData, ...data },
   })),
-  resetWizard: () => set({ wizardData: { ...initialWizardData }, currentStep: 0 }),
+  loadWizardData: (data, agentId) => set({
+    wizardData: { ...initialWizardData, ...data },
+    editingAgentId: agentId,
+    currentStep: 0,
+  }),
+  resetWizard: () => set({ wizardData: { ...initialWizardData }, editingAgentId: null, currentStep: 0 }),
 }));

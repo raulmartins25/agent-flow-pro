@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAgentStore } from '@/stores/agentStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -11,7 +11,7 @@ import { WizardStep3 } from '@/components/wizard/WizardStep3';
 import { WizardStep4 } from '@/components/wizard/WizardStep4';
 import { WizardStep5 } from '@/components/wizard/WizardStep5';
 import { WizardStep6 } from '@/components/wizard/WizardStep6';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const steps = [
   { title: 'Tipo & Conexão', component: WizardStep1 },
@@ -23,10 +23,70 @@ const steps = [
 ];
 
 export default function AgentWizard() {
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { wizardData, currentStep, setCurrentStep, resetWizard } = useAgentStore();
+  const { wizardData, currentStep, setCurrentStep, resetWizard, editingAgentId, loadWizardData } = useAgentStore();
   const user = useAuthStore((s) => s.user);
   const [saving, setSaving] = useState(false);
+  const [loadingAgent, setLoadingAgent] = useState(false);
+
+  const isEditing = !!id;
+
+  // Load agent data when editing
+  useEffect(() => {
+    if (!id) return;
+    if (editingAgentId === id) return; // already loaded
+
+    const loadAgent = async () => {
+      setLoadingAgent(true);
+      try {
+        const { data: agent, error: agentError } = await supabase
+          .from('agents')
+          .select('*')
+          .eq('id', id)
+          .single();
+        if (agentError || !agent) throw agentError || new Error('Agente não encontrado');
+
+        const { data: config } = await supabase
+          .from('agent_config')
+          .select('*')
+          .eq('agent_id', id)
+          .single();
+
+        loadWizardData({
+          name: agent.name,
+          type: agent.type,
+          device_id: agent.device_id || '',
+          llm_provider: agent.llm_provider,
+          llm_model: agent.llm_model || '',
+          llm_api_key: agent.llm_api_key || '',
+          transfer_number: agent.transfer_number || '',
+          transfer_trigger: agent.transfer_trigger || 'after_all_questions',
+          followup_start_message: agent.followup_start_message ?? 3,
+          followup_max: agent.followup_max ?? 3,
+          followup_interval_minutes: agent.followup_interval_minutes ?? 120,
+          ai_restrictions: config?.ai_restrictions || '',
+          agent_persona_name: config?.agent_persona_name || '',
+          company_name: config?.company_name || '',
+          segment: config?.segment || '',
+          tone: config?.tone || 'semi-formal',
+          product_service_description: config?.product_service_description || '',
+          welcome_message: config?.welcome_message || '',
+          first_prospecting_message: config?.first_prospecting_message || '',
+          qualification_questions: (config?.qualification_questions as any[]) || [],
+          objection_handlers: (config?.objection_handlers as any[]) || [],
+          transfer_summary_template: config?.transfer_summary_template || '',
+          ban_triggers: agent.restrictions ? agent.restrictions.split(',').map((s: string) => s.trim()) : ['para', 'stop', 'me tira', 'não quero', 'denuncia', 'spam', 'me bloqueia'],
+        }, id);
+      } catch (e: any) {
+        toast.error(e.message || 'Erro ao carregar agente');
+        navigate('/agents');
+      } finally {
+        setLoadingAgent(false);
+      }
+    };
+    loadAgent();
+  }, [id]);
 
   const validateStep = (): string | null => {
     switch (currentStep) {
@@ -61,12 +121,13 @@ export default function AgentWizard() {
     const error = validateStep();
     if (error) { toast.error(error); return; }
 
-    // Check if device already has an active agent
+    // Check if device already has an active agent (exclude self when editing)
     const { data: existingAgents } = await supabase
       .from('agents')
       .select('id, name')
       .eq('device_id', wizardData.device_id)
-      .eq('status', 'active');
+      .eq('status', 'active')
+      .neq('id', isEditing ? id! : '00000000-0000-0000-0000-000000000000');
 
     if (existingAgents && existingAgents.length > 0) {
       toast.error(`Este dispositivo já tem um agente ativo: ${existingAgents[0].name}`);
@@ -77,48 +138,95 @@ export default function AgentWizard() {
     try {
       const prompt = compileAgentPrompt(wizardData);
 
-      const { data: agentData, error: agentError } = await supabase
-        .from('agents')
-        .insert({
-          user_id: user.id,
-          name: wizardData.name,
-          type: wizardData.type,
-          status: 'active',
-          device_id: wizardData.device_id,
-          llm_provider: wizardData.llm_provider,
-          llm_model: wizardData.llm_model,
-          llm_api_key: wizardData.llm_api_key || null,
-          prompt_compiled: prompt,
-          restrictions: wizardData.ai_restrictions || null,
-          transfer_number: wizardData.transfer_number || null,
-          transfer_trigger: wizardData.transfer_trigger || null,
-          followup_start_message: wizardData.followup_start_message,
-          followup_max: wizardData.followup_max,
-          followup_interval_minutes: wizardData.followup_interval_minutes,
-        })
-        .select()
-        .single();
+      if (isEditing) {
+        // Update existing agent
+        const { error: agentError } = await supabase
+          .from('agents')
+          .update({
+            name: wizardData.name,
+            type: wizardData.type,
+            device_id: wizardData.device_id,
+            llm_provider: wizardData.llm_provider,
+            llm_model: wizardData.llm_model,
+            llm_api_key: wizardData.llm_api_key || null,
+            prompt_compiled: prompt,
+            restrictions: wizardData.ai_restrictions || null,
+            transfer_number: wizardData.transfer_number || null,
+            transfer_trigger: wizardData.transfer_trigger || null,
+            followup_start_message: wizardData.followup_start_message,
+            followup_max: wizardData.followup_max,
+            followup_interval_minutes: wizardData.followup_interval_minutes,
+          })
+          .eq('id', id!);
 
-      if (agentError) throw agentError;
+        if (agentError) throw agentError;
 
-      const { error: configError } = await supabase.from('agent_config').insert({
-        agent_id: agentData.id,
-        agent_persona_name: wizardData.agent_persona_name,
-        company_name: wizardData.company_name,
-        segment: wizardData.segment || null,
-        tone: wizardData.tone,
-        product_service_description: wizardData.product_service_description,
-        welcome_message: wizardData.welcome_message || null,
-        first_prospecting_message: wizardData.first_prospecting_message || null,
-        ai_restrictions: wizardData.ai_restrictions || null,
-        qualification_questions: wizardData.qualification_questions,
-        objection_handlers: wizardData.objection_handlers,
-        transfer_summary_template: wizardData.transfer_summary_template || null,
-      });
+        const { error: configError } = await supabase
+          .from('agent_config')
+          .update({
+            agent_persona_name: wizardData.agent_persona_name,
+            company_name: wizardData.company_name,
+            segment: wizardData.segment || null,
+            tone: wizardData.tone,
+            product_service_description: wizardData.product_service_description,
+            welcome_message: wizardData.welcome_message || null,
+            first_prospecting_message: wizardData.first_prospecting_message || null,
+            ai_restrictions: wizardData.ai_restrictions || null,
+            qualification_questions: wizardData.qualification_questions,
+            objection_handlers: wizardData.objection_handlers,
+            transfer_summary_template: wizardData.transfer_summary_template || null,
+          })
+          .eq('agent_id', id!);
 
-      if (configError) throw configError;
+        if (configError) throw configError;
 
-      toast.success('Agente criado com sucesso!');
+        toast.success('Agente atualizado com sucesso!');
+      } else {
+        // Create new agent
+        const { data: agentData, error: agentError } = await supabase
+          .from('agents')
+          .insert({
+            user_id: user.id,
+            name: wizardData.name,
+            type: wizardData.type,
+            status: 'active',
+            device_id: wizardData.device_id,
+            llm_provider: wizardData.llm_provider,
+            llm_model: wizardData.llm_model,
+            llm_api_key: wizardData.llm_api_key || null,
+            prompt_compiled: prompt,
+            restrictions: wizardData.ai_restrictions || null,
+            transfer_number: wizardData.transfer_number || null,
+            transfer_trigger: wizardData.transfer_trigger || null,
+            followup_start_message: wizardData.followup_start_message,
+            followup_max: wizardData.followup_max,
+            followup_interval_minutes: wizardData.followup_interval_minutes,
+          })
+          .select()
+          .single();
+
+        if (agentError) throw agentError;
+
+        const { error: configError } = await supabase.from('agent_config').insert({
+          agent_id: agentData.id,
+          agent_persona_name: wizardData.agent_persona_name,
+          company_name: wizardData.company_name,
+          segment: wizardData.segment || null,
+          tone: wizardData.tone,
+          product_service_description: wizardData.product_service_description,
+          welcome_message: wizardData.welcome_message || null,
+          first_prospecting_message: wizardData.first_prospecting_message || null,
+          ai_restrictions: wizardData.ai_restrictions || null,
+          qualification_questions: wizardData.qualification_questions,
+          objection_handlers: wizardData.objection_handlers,
+          transfer_summary_template: wizardData.transfer_summary_template || null,
+        });
+
+        if (configError) throw configError;
+
+        toast.success('Agente criado com sucesso!');
+      }
+
       resetWizard();
       navigate('/agents');
     } catch (e: any) {
@@ -128,12 +236,20 @@ export default function AgentWizard() {
     }
   };
 
+  if (loadingAgent) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
   const StepComponent = steps[currentStep].component;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Novo Agente</h1>
+        <h1 className="text-3xl font-bold">{isEditing ? 'Editar Agente' : 'Novo Agente'}</h1>
         <p className="text-muted-foreground">Configure seu agente passo a passo</p>
       </div>
 
@@ -162,7 +278,7 @@ export default function AgentWizard() {
           <Button onClick={handleNext}>Próximo</Button>
         ) : (
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? 'Salvando...' : 'Salvar e Gerar Prompt'}
+            {saving ? 'Salvando...' : isEditing ? 'Salvar Alterações' : 'Salvar e Gerar Prompt'}
           </Button>
         )}
       </div>

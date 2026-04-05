@@ -41,6 +41,7 @@ const App = () => (
               <Route path="/devices" element={<DevicesPage />} />
               <Route path="/agents" element={<Agents />} />
               <Route path="/agents/new" element={<AgentWizard />} />
+              <Route path="/agents/:id/edit" element={<AgentWizard />} />
               <Route path="/agents/:id/simulator" element={<SimulatorPage />} />
               <Route path="/inbox" element={<InboxPage />} />
               <Route path="/inbox/:conversationId" element={<InboxPage />} />
