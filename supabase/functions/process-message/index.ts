@@ -222,9 +222,24 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       });
     }
 
-    const shouldTransfer = aiResponse.includes("TRANSFER_LEAD");
+    let shouldTransfer = aiResponse.includes("TRANSFER_LEAD");
     let cleanResponse = aiResponse.replace(/TRANSFER_LEAD/g, "").trim();
-    console.log(`Transfer check: shouldTransfer=${shouldTransfer}, transfer_number=${agentFull?.transfer_number}, contactName=${contactName}, sender_instance=${evoInstance}`);
+
+    // --- Programmatic transfer detection ---
+    const questions = (config?.qualification_questions as any[]) || [];
+    const userMessages = history.filter((m: any) => m.role === "user");
+    const offset = agentFull?.type === "prospecting" ? 1 : 0;
+    const answeredQuestions = userMessages.length - offset;
+    const transferTrigger = agentFull?.transfer_trigger || "after_all_questions";
+
+    console.log(`Transfer check: tokenBased=${shouldTransfer}, programmatic: answered=${answeredQuestions}/${questions.length}, trigger=${transferTrigger}, transfer_number=${agentFull?.transfer_number}`);
+
+    if (!shouldTransfer && transferTrigger === "after_all_questions" 
+        && questions.length > 0 && answeredQuestions >= questions.length 
+        && agentFull?.transfer_number) {
+      shouldTransfer = true;
+      console.log("Transfer FORCED programmatically: all questions answered");
+    }
 
     if (shouldTransfer && agentFull?.transfer_number && device) {
       console.log(`Enviando resumo para número de transferência: ${agentFull.transfer_number}`);
