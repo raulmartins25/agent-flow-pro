@@ -146,10 +146,47 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       });
     }
 
+    // --- TRANSFER_LEAD detection ---
+    const shouldTransfer = aiResponse.includes('TRANSFER_LEAD');
+    let cleanResponse = aiResponse.replace(/TRANSFER_LEAD/g, '').trim();
+
+    if (shouldTransfer && agentFull?.transfer_number && device) {
+      const userMessages = history.filter((m: any) => m.role === "user");
+      const questions = (config?.qualification_questions as any[]) || [];
+
+      let summary = `*Novo lead qualificado* ✅\n\n`;
+      summary += `*Telefone:* ${contact_number}\n`;
+      summary += `*Data:* ${new Date().toLocaleString('pt-BR')}\n`;
+      summary += `*Agente:* ${agentFull.name}\n\n`;
+      summary += `*Respostas do lead:*\n`;
+
+      questions.forEach((q: any, index: number) => {
+        const answer = userMessages[index + (agentFull.type === 'prospecting' ? 1 : 0)];
+        summary += `\n*${index + 1}. ${q.question}*\n`;
+        summary += `→ ${answer?.content || 'Não respondida'}\n`;
+      });
+
+      try {
+        await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", apikey: evoKey || "" },
+          body: JSON.stringify({ number: agentFull.transfer_number, text: summary }),
+        });
+        console.log(`Lead transferido para: ${agentFull.transfer_number}`);
+      } catch (transferErr) {
+        console.error("Error sending transfer summary:", transferErr);
+      }
+
+      await supabase
+        .from("conversations")
+        .update({ status: "transferred" })
+        .eq("id", conversation_id);
+    }
+
     // --- SEND_MEDIA detection ---
     const mediaRegex = /SEND_MEDIA:([a-f0-9-]+)/gi;
-    const mediaMatches = [...aiResponse.matchAll(mediaRegex)];
-    let cleanResponse = aiResponse.replace(mediaRegex, "").replace(/\s{2,}/g, " ").trim();
+    const mediaMatches = [...cleanResponse.matchAll(mediaRegex)];
+    cleanResponse = cleanResponse.replace(mediaRegex, "").replace(/\s{2,}/g, " ").trim();
 
     for (const match of mediaMatches) {
       const questionId = match[1];
