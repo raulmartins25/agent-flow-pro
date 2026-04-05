@@ -159,7 +159,7 @@ export function WizardStep6() {
                         className="cursor-pointer hover:bg-primary/10 transition-colors text-xs"
                         onClick={() => insertAtCursor(`{{pergunta_${num}}}`)}
                       >
-                        📝 P{num}: {truncated}
+                        📝{q.media?.file_url ? '📎' : ''} P{num}: {truncated}
                       </Badge>
                       <Badge
                         variant="outline"
