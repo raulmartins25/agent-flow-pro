@@ -100,7 +100,9 @@ export default function ChipWarmupPage() {
   };
 
   const showInstanceField = provider === 'evolution' || provider === 'waha';
-  const showTokenField = provider === 'waha';
+  const showTokenField = provider === 'evolution' || provider === 'waha';
+  const tokenLabel = provider === 'evolution' ? 'API Key' : 'Token';
+  const tokenRequired = showTokenField;
 
   return (
     <div className="space-y-6">
@@ -163,9 +165,9 @@ export default function ChipWarmupPage() {
 
               {showTokenField && (
                 <div className="space-y-2">
-                  <Label>Token</Label>
+                  <Label>{tokenLabel} *</Label>
                   <Input
-                    placeholder="Token de autenticação"
+                    placeholder={provider === 'evolution' ? 'Sua API Key da Evolution' : 'Token de autenticação'}
                     value={token}
                     onChange={(e) => setToken(e.target.value)}
                   />
@@ -178,7 +180,7 @@ export default function ChipWarmupPage() {
               </Button>
               <Button
                 onClick={() => connectMutation.mutate()}
-                disabled={!apiUrl || connectMutation.isPending}
+                disabled={!apiUrl || (tokenRequired && !token) || connectMutation.isPending}
               >
                 {connectMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Conectar
