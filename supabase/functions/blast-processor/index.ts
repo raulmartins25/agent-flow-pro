@@ -222,10 +222,33 @@ serve(async (req) => {
         .from("blast_campaigns")
         .update({ status: "completed", completed_at: new Date().toISOString() })
         .eq("id", campaign_id);
+    } else {
+      // Auto-continuation: self-invoke for next batch
+      const { data: statusCheck } = await supabase
+        .from("blast_campaigns")
+        .select("status")
+        .eq("id", campaign_id)
+        .single();
+
+      if (statusCheck?.status === "running") {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        // Small delay before re-invoking to avoid tight loops
+        await new Promise((r) => setTimeout(r, 2000));
+        fetch(`${supabaseUrl}/functions/v1/blast-processor`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${anonKey}`,
+          },
+          body: JSON.stringify({ campaign_id }),
+        }).catch((e) => console.error("Auto-continuation error:", e));
+        console.log("Auto-continuation triggered for campaign", campaign_id);
+      }
     }
 
     return new Response(
-      JSON.stringify({ ok: true, sent: sentCount, errors: errorCount }),
+      JSON.stringify({ ok: true, sent: sentCount, errors: errorCount, remaining: count || 0 }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
