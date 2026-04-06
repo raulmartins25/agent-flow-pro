@@ -297,7 +297,8 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
     }
 
     let shouldTransfer = aiResponse.includes("TRANSFER_LEAD");
-    let cleanResponse = aiResponse.replace(/TRANSFER_LEAD/g, "").trim();
+    const shouldEndConversation = aiResponse.includes("END_CONVERSATION");
+    let cleanResponse = aiResponse.replace(/TRANSFER_LEAD/g, "").replace(/END_CONVERSATION/g, "").trim();
 
     // --- Programmatic transfer detection ---
     const questions = (config?.qualification_questions as any[]) || [];
