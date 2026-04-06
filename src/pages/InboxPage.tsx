@@ -137,15 +137,26 @@ export default function InboxPage() {
     else setInput('');
   };
 
-  const filtered = conversations.filter(c => {
-    const matchSearch = (c.contact_name || c.contact_number || '').toLowerCase().includes(search.toLowerCase());
-    const matchFilter = filter === 'all' ||
-      (filter === 'active' && c.status === 'active' && !c.agent_paused) ||
-      (filter === 'paused' && c.agent_paused) ||
-      (filter === 'transferred' && c.status === 'transferred');
-    const matchDevice = deviceFilter === 'all' || c.device_id === deviceFilter;
-    return matchSearch && matchFilter && matchDevice;
-  });
+  const filtered = (() => {
+    const matched = conversations.filter(c => {
+      const matchSearch = (c.contact_name || c.contact_number || '').toLowerCase().includes(search.toLowerCase());
+      const matchFilter = filter === 'all' ||
+        (filter === 'active' && c.status === 'active' && !c.agent_paused) ||
+        (filter === 'paused' && c.agent_paused) ||
+        (filter === 'transferred' && c.status === 'transferred');
+      const matchDevice = deviceFilter === 'all' || c.device_id === deviceFilter;
+      return matchSearch && matchFilter && matchDevice;
+    });
+    // Deduplicate: keep only the most recent conversation per contact_number
+    const seen = new Map<string, Conversation>();
+    for (const c of matched) {
+      const key = c.contact_number;
+      if (!seen.has(key) || new Date(c.last_message_at || 0) > new Date(seen.get(key)!.last_message_at || 0)) {
+        seen.set(key, c);
+      }
+    }
+    return Array.from(seen.values());
+  })();
 
   const statusColor = (c: Conversation) => {
     if (c.agent_paused) return 'bg-warning';
