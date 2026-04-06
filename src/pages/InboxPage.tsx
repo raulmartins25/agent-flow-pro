@@ -44,7 +44,7 @@ export default function InboxPage() {
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'active' | 'paused' | 'transferred'>('all');
+  const [filter, setFilter] = useState<'all' | 'active' | 'paused' | 'transferred' | 'replied'>('all');
   const [deviceFilter, setDeviceFilter] = useState<string>('all');
   const [devices, setDevices] = useState<Device[]>([]);
   const [input, setInput] = useState('');
