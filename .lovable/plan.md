@@ -1,41 +1,44 @@
 
 
-# Correção: IA continua qualificando após transferência
+# Correções no compilePrompt.ts — 4 ajustes no prompt de prospecção
 
-## Problema
-Quando a conversa já está `transferred`, o `process-message` continua enviando o prompt completo de qualificação para a IA. O `alreadyTransferred` só bloqueia a transferência duplicada, mas não muda o comportamento da IA.
+## Mudanças
 
-## Solução
-
-### 1. `supabase/functions/process-message/index.ts` — Early return para conversas transferidas
-
-Logo após buscar o `convStatus` (linha ~236-241), **antes** de chamar a IA com o prompt de qualificação, interceptar e usar um prompt livre:
-
-- Mover a query de `convStatus` para **antes** da construção do `systemPrompt` (logo após obter `config`, `device`, etc. — ~linha 115)
-- Se `convStatus === 'transferred'`:
-  - Montar um system prompt simplificado: "Você é [persona] da [empresa]. Esta conversa já foi encerrada e o lead foi transferido para a equipe. Responda de forma breve e cordial. NÃO faça perguntas de qualificação. NÃO emita TRANSFER_LEAD. Se perguntarem sobre próximos passos, diga que a equipe entrará em contato."
-  - Chamar a IA normalmente com esse prompt + histórico recente (últimas 10 mensagens)
-  - Salvar resposta e enviar via WhatsApp
-  - **Return** imediatamente — sem passar pelo fluxo de transferência/mídia
-
-### 2. `src/lib/compilePrompt.ts` — Reforço no bloco de transferência
-
-Após a linha 159 (item 4 do bloco TRANSFERÊNCIA), adicionar:
+### 1. PROTEÇÃO ANTI-BAN (linhas 171-175)
+Substituir o bloco atual por versão com palavras-chave fixas (não mais usando `ban_triggers` do config) e adicionando token `END_CONVERSATION`:
 
 ```
-APÓS EMITIR TRANSFER_LEAD:
-- A conversa está ENCERRADA para fins de qualificação
-- Se o lead enviar novas mensagens, responda APENAS dúvidas gerais de forma breve
-- NUNCA volte ao script de perguntas
-- NUNCA emita TRANSFER_LEAD novamente
-- NUNCA peça informações de qualificação novamente
-- Se perguntarem sobre próximos passos: "Nossa equipe já tem suas informações e entrará em contato em breve!"
+PROTEÇÃO ANTI-BAN:
+Se o lead demonstrar irritação, usar palavras como "para", "stop", "me tira", "não quero", "me bloqueia", "spam", ou qualquer sinal claro de que não quer receber mensagens:
+1. Responda: "Entendido! Não te incomodarei mais. Qualquer dúvida, estaremos aqui!"
+2. Encerre o atendimento imediatamente.
+3. Emita o token: END_CONVERSATION
+4. NUNCA tente reconverter um lead que pediu para parar.
 ```
 
-## Arquivos impactados
+### 2. Nome automático — adicionar instrução no `base` (após linha 84)
+Inserir após RESTRIÇÕES ABSOLUTAS:
+```
+INFORMAÇÃO DO CONTATO:
+O nome do contato é fornecido automaticamente pelo sistema via WhatsApp. Não pergunte o nome — use-o para personalizar se disponível.
+```
+
+### 3. Remover emojis das respostas pré-definidas
+- Linha 155: remover `😊` do exemplo de mensagem de encerramento
+- Nenhum outro emoji hardcoded encontrado no template
+
+### 4. Tratamento de identidade — adicionar após REGRAS CRÍTICAS (linha 116)
+Inserir novo bloco no `messageSection` de prospecção:
+```
+SE O LEAD PERGUNTAR QUEM É VOCÊ OU COMO CONSEGUIU O CONTATO:
+- "Como você conseguiu meu número?" → "Encontramos o contato em uma busca online. Trabalhamos com [segmento] e identificamos seu negócio como um perfil que poderia se beneficiar do nosso trabalho."
+- "Quem é você / O que é isso?" → Apresente-se brevemente (nome + empresa + especialidade) em no máximo 2 linhas, depois retome naturalmente.
+- Nunca seja evasivo nem invente fontes de contato.
+```
+
+## Arquivo impactado
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/functions/process-message/index.ts` | Early return com prompt livre para conversas transferidas |
-| `src/lib/compilePrompt.ts` | Bloco pós-transferência reforçado |
+| `src/lib/compilePrompt.ts` | 4 ajustes: anti-ban, nome automático, remoção de emojis, tratamento de identidade |
 
