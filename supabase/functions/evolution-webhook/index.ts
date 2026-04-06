@@ -105,7 +105,17 @@ serve(async (req) => {
       );
 
       if (blacklisted) {
-        console.log(`Número ${normalizedPhone} está na blacklist — ignorando`);
+        console.log(`Número ${canonicalRemote} está na blacklist — ignorando`);
+
+        // Close any open conversations for this blacklisted number
+        await supabase
+          .from("conversations")
+          .update({ status: "closed", agent_paused: true, is_waiting_reply: false })
+          .eq("agent_id", agent.id)
+          .eq("device_id", device.id)
+          .eq("contact_number", remoteJid)
+          .in("status", ["active", "paused"]);
+
         return new Response(JSON.stringify({ ok: true, message: "Blacklisted" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
