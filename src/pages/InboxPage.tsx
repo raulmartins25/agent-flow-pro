@@ -201,11 +201,11 @@ export default function InboxPage() {
             <Input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Buscar..." className="pl-9 h-9" />
           </div>
-          <div className="flex gap-1">
-            {(['all', 'active', 'paused', 'transferred'] as const).map(f => (
+          <div className="flex gap-1 flex-wrap">
+            {(['all', 'active', 'replied', 'paused', 'transferred'] as const).map(f => (
               <button key={f} onClick={() => setFilter(f)}
                 className={`text-xs px-2 py-1 rounded-md transition-colors ${filter === f ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
-                {f === 'all' ? 'Todas' : f === 'active' ? 'Ativas' : f === 'paused' ? 'Pausadas' : 'Transferidas'}
+                {f === 'all' ? 'Todas' : f === 'active' ? 'Ativas' : f === 'replied' ? 'Em Conversa' : f === 'paused' ? 'Pausadas' : 'Transferidas'}
               </button>
             ))}
           </div>
