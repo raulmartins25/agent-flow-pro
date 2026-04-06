@@ -74,6 +74,11 @@ export default function AgentWizard() {
           product_service_description: config?.product_service_description || '',
           welcome_message: config?.welcome_message || '',
           first_prospecting_message: config?.first_prospecting_message || '',
+          prospecting_messages: Array.isArray(config?.prospecting_messages) && (config.prospecting_messages as string[]).length > 0
+            ? (config.prospecting_messages as string[])
+            : config?.first_prospecting_message
+              ? [config.first_prospecting_message]
+              : [''],
           qualification_questions: (config?.qualification_questions as any[]) || [],
           objection_handlers: (config?.objection_handlers as any[]) || [],
           transfer_summary_template: config?.transfer_summary_template || '',
@@ -102,7 +107,10 @@ export default function AgentWizard() {
         break;
       case 2:
         if (wizardData.type === 'receptive' && !wizardData.welcome_message.trim()) return 'Mensagem de boas-vindas é obrigatória';
-        if (wizardData.type === 'prospecting' && !wizardData.first_prospecting_message.trim()) return 'Mensagem de prospecção é obrigatória';
+        if (wizardData.type === 'prospecting') {
+          const hasMsg = wizardData.prospecting_messages.some(m => m.trim());
+          if (!hasMsg) return 'Pelo menos uma variação de mensagem é obrigatória';
+        }
         break;
       case 5:
         if (wizardData.llm_provider !== 'claude' && !wizardData.llm_api_key.trim()) return 'API Key da LLM é obrigatória';
@@ -171,7 +179,8 @@ export default function AgentWizard() {
             tone: wizardData.tone,
             product_service_description: wizardData.product_service_description,
             welcome_message: wizardData.welcome_message || null,
-            first_prospecting_message: wizardData.first_prospecting_message || null,
+            first_prospecting_message: wizardData.prospecting_messages[0] || wizardData.first_prospecting_message || null,
+            prospecting_messages: wizardData.prospecting_messages.filter(m => m.trim()),
             ai_restrictions: wizardData.ai_restrictions || null,
             qualification_questions: wizardData.qualification_questions,
             objection_handlers: wizardData.objection_handlers,
@@ -216,7 +225,8 @@ export default function AgentWizard() {
           tone: wizardData.tone,
           product_service_description: wizardData.product_service_description,
           welcome_message: wizardData.welcome_message || null,
-          first_prospecting_message: wizardData.first_prospecting_message || null,
+          first_prospecting_message: wizardData.prospecting_messages[0] || wizardData.first_prospecting_message || null,
+          prospecting_messages: wizardData.prospecting_messages.filter(m => m.trim()),
           ai_restrictions: wizardData.ai_restrictions || null,
           qualification_questions: wizardData.qualification_questions,
           objection_handlers: wizardData.objection_handlers,

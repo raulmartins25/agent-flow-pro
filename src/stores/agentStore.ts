@@ -15,6 +15,7 @@ interface AgentWizardData {
   // Step 3
   welcome_message: string;
   first_prospecting_message: string;
+  prospecting_messages: string[];
   // Step 4
   qualification_questions: Array<{
     id: string;
@@ -64,6 +65,7 @@ const initialWizardData: AgentWizardData = {
   ai_restrictions: '',
   welcome_message: 'Olá {{nome_contato}}! 👋 Sou {{nome_agente}} da {{empresa}}. Como posso te ajudar hoje?',
   first_prospecting_message: 'Olá {{nome_contato}}! 👋 Sou {{nome_agente}} da {{empresa}}. Tudo bem?',
+  prospecting_messages: ['Olá {{nome_contato}}! 👋 Sou {{nome_agente}} da {{empresa}}. Tudo bem?'],
   qualification_questions: [],
   objection_handlers: [
     { objection: 'Não tenho interesse', response: 'Entendo perfeitamente! Caso mude de ideia, estou à disposição. 😊' },
