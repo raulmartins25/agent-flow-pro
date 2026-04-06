@@ -146,9 +146,20 @@ export default function NewBlastPage() {
       return { phone: rawPhone, name, formatted, valid, error, custom_vars: Object.keys(customVars).length ? customVars : undefined };
     });
 
-    setContacts(parsed);
-    const validCount = parsed.filter(c => c.valid).length;
-    toast.success(`${parsed.length} contatos importados, ${validCount} válidos`);
+    // Deduplicate by formatted phone — keep first occurrence
+    const seen = new Set<string>();
+    let dupCount = 0;
+    const deduped = parsed.filter(c => {
+      if (!c.valid || !c.formatted) return true; // keep invalid for display
+      if (seen.has(c.formatted)) { dupCount++; return false; }
+      seen.add(c.formatted);
+      return true;
+    });
+
+    setContacts(deduped);
+    const validCount = deduped.filter(c => c.valid).length;
+    const dupMsg = dupCount > 0 ? ` (${dupCount} duplicados removidos)` : '';
+    toast.success(`${deduped.length} contatos importados, ${validCount} válidos${dupMsg}`);
   };
 
   const handleCreate = async () => {
