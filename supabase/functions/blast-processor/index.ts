@@ -28,7 +28,7 @@ serve(async (req) => {
 
     const { data: campaign } = await supabase
       .from("blast_campaigns")
-      .select("*, agents(id, prompt_compiled, type, device_id, agent_config(first_prospecting_message, agent_persona_name, company_name), devices(id, evolution_api_url, evolution_api_key, instance_name, status))")
+      .select("*, agents(id, prompt_compiled, type, device_id, agent_config(first_prospecting_message, prospecting_messages, agent_persona_name, company_name), devices(id, evolution_api_url, evolution_api_key, instance_name, status))")
       .eq("id", campaign_id)
       .single();
 
@@ -76,9 +76,23 @@ serve(async (req) => {
     let sentCount = 0;
     let errorCount = 0;
     const agentConfig = agent.agent_config?.[0];
-    const blastMessage = agentConfig?.first_prospecting_message || "Olá!";
-    const agentPersonaName = agentConfig?.agent_persona_name || "";
-    const companyName = agentConfig?.company_name || "";
+    const agentPersonaName = agentConfig?.agent_persona_name?.trim() || "";
+    const companyName = agentConfig?.company_name?.trim() || "";
+
+    // Resolve messages array with fallback
+    const prospectingMessages: string[] =
+      Array.isArray(agentConfig?.prospecting_messages) && agentConfig.prospecting_messages.length > 0
+        ? agentConfig.prospecting_messages.filter((m: string) => typeof m === 'string' && m.trim())
+        : agentConfig?.first_prospecting_message
+          ? [agentConfig.first_prospecting_message]
+          : [];
+
+    if (prospectingMessages.length === 0) {
+      await supabase.from("blast_campaigns").update({ status: "error" }).eq("id", campaign_id);
+      return new Response(JSON.stringify({ error: "Agente sem mensagem de disparo configurada" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     for (const contact of contacts) {
       try {
@@ -92,10 +106,14 @@ serve(async (req) => {
           break;
         }
 
-        const message = blastMessage
-          .replace("{{nome_contato}}", contact.name || "")
-          .replace("{{nome_agente}}", agentPersonaName)
-          .replace("{{empresa}}", companyName);
+        // Select random variation
+        const randomIndex = Math.floor(Math.random() * prospectingMessages.length);
+        const selectedMessage = prospectingMessages[randomIndex];
+
+        const message = selectedMessage
+          .replace(/\{\{nome_contato\}\}/g, contact.name?.trim() || "")
+          .replace(/\{\{nome_agente\}\}/g, agentPersonaName)
+          .replace(/\{\{empresa\}\}/g, companyName);
 
         const res = await fetch(
           `${device.evolution_api_url}/message/sendText/${device.instance_name}`,
