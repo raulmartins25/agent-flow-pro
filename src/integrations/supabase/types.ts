@@ -150,6 +150,30 @@ export type Database = {
           },
         ]
       }
+      blacklist: {
+        Row: {
+          created_at: string | null
+          id: string
+          label: string | null
+          phone: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          label?: string | null
+          phone: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          label?: string | null
+          phone?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       blast_campaigns: {
         Row: {
           agent_id: string

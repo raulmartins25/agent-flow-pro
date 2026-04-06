@@ -130,6 +130,25 @@ serve(async (req) => {
     for (const contact of contacts) {
       // Skip duplicate phones
       const normalizedCheck = canonicalPhone(contact.phone);
+
+      // --- BLACKLIST CHECK ---
+      const { data: blacklisted } = await supabase
+        .from("blacklist")
+        .select("id")
+        .eq("user_id", campaign.user_id)
+        .eq("phone", normalizedCheck)
+        .maybeSingle();
+
+      if (blacklisted) {
+        await supabase.from("blast_contacts").update({
+          status: "error",
+          error_message: "Número na blacklist",
+        }).eq("id", contact.id);
+        errorCount++;
+        console.log(`Número ${normalizedCheck} na blacklist — pulando`);
+        continue;
+      }
+
       if (sentPhones.has(normalizedCheck)) {
         await supabase
           .from("blast_contacts")

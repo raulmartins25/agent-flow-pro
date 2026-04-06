@@ -92,6 +92,22 @@ serve(async (req) => {
         });
       }
 
+      // --- BLACKLIST CHECK ---
+      const normalizedPhone = remoteJid.replace(/@.*$/, "").replace(/\D/g, "");
+      const { data: blacklisted } = await supabase
+        .from("blacklist")
+        .select("id")
+        .eq("user_id", agent.user_id)
+        .or(`phone.eq.${normalizedPhone},phone.eq.${remoteJid}`)
+        .maybeSingle();
+
+      if (blacklisted) {
+        console.log(`Número ${normalizedPhone} está na blacklist — ignorando`);
+        return new Response(JSON.stringify({ ok: true, message: "Blacklisted" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       // --- RANKED conversation lookup ---
       // Only look for OPEN conversations (is_waiting_reply, active, paused)
       // Do NOT reuse transferred or closed conversations
