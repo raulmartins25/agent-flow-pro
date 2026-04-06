@@ -33,6 +33,12 @@ serve(async (req) => {
       const agent = conv.agents as any;
       if (!agent || agent.status !== "active") continue;
 
+      // Prospecting agents: only followup if lead already replied (is_waiting_reply === false)
+      if (agent.type === "prospecting" && conv.is_waiting_reply === true) {
+        console.log(`Conversa ${conv.id} ignorada — lead nunca respondeu ao disparo`);
+        continue;
+      }
+
       const device = agent.devices;
       if (!device || device.status !== "connected") continue;
 
