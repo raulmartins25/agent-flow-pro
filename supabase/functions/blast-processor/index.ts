@@ -307,21 +307,34 @@ serve(async (req) => {
       }
     }
 
-    await supabase
-      .from("blast_campaigns")
-      .update({
-        sent_count: campaign.sent_count + sentCount,
-        error_count: campaign.error_count + errorCount,
-      })
-      .eq("id", campaign_id);
+    // Recount actual totals from blast_contacts (eliminates race conditions)
+    const { count: actualSent } = await supabase
+      .from("blast_contacts")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaign_id)
+      .eq("status", "sent");
 
-    const { count } = await supabase
+    const { count: actualErrors } = await supabase
+      .from("blast_contacts")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaign_id)
+      .eq("status", "error");
+
+    const { count: actualPending } = await supabase
       .from("blast_contacts")
       .select("id", { count: "exact", head: true })
       .eq("campaign_id", campaign_id)
       .eq("status", "pending");
 
-    if (!count || count === 0) {
+    await supabase
+      .from("blast_campaigns")
+      .update({
+        sent_count: actualSent || 0,
+        error_count: actualErrors || 0,
+      })
+      .eq("id", campaign_id);
+
+    if (!actualPending || actualPending === 0) {
       await supabase
         .from("blast_campaigns")
         .update({ status: "completed", completed_at: new Date().toISOString() })
