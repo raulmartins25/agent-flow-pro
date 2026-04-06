@@ -189,6 +189,16 @@ serve(async (req) => {
             .from("blast_contacts")
             .update({ status: "sent", sent_at: new Date().toISOString() })
             .eq("id", contact.id);
+
+          // Save variation metadata (non-blocking)
+          try {
+            await supabase
+              .from("blast_contacts")
+              .update({ metadata: { message_variation_index: randomIndex } } as any)
+              .eq("id", contact.id);
+          } catch (e) {
+            console.log("metadata não salvo, continuando:", e);
+          }
           sentCount++;
         } else {
           const errText = await res.text();
