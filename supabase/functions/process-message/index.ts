@@ -445,6 +445,15 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       }
     }
 
+    // --- END_CONVERSATION detection ---
+    if (shouldEndConversation && !shouldTransfer) {
+      console.log("END_CONVERSATION detected — closing conversation");
+      await supabase
+        .from("conversations")
+        .update({ status: "closed" })
+        .eq("id", conversation_id);
+    }
+
     const mediaRegex = /SEND_MEDIA:([a-f0-9-]+)/gi;
     const mediaMatches = [...cleanResponse.matchAll(mediaRegex)];
     cleanResponse = cleanResponse.replace(mediaRegex, "").replace(/\s{2,}/g, " ").trim();
