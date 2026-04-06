@@ -151,7 +151,7 @@ export default function InboxPage() {
     const seen = new Map<string, Conversation>();
     for (const c of matched) {
       const key = c.contact_number;
-      if (!seen.has(key) || new Date(c.last_message_at || c.created_at || 0) > new Date(seen.get(key)!.last_message_at || seen.get(key)!.created_at || 0)) {
+      if (!seen.has(key) || new Date(c.last_message_at || 0) > new Date(seen.get(key)!.last_message_at || 0)) {
         seen.set(key, c);
       }
     }
