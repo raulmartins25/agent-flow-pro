@@ -9,10 +9,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Upload, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Upload, AlertCircle, CheckCircle2, CalendarIcon, Clock } from 'lucide-react';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import { cn } from '@/lib/utils';
 
 type ParsedContact = {
   phone: string;
@@ -62,6 +68,9 @@ export default function NewBlastPage() {
   const [blastPreview, setBlastPreview] = useState('');
   const [previewAgentName, setPreviewAgentName] = useState('');
   const [previewCompanyName, setPreviewCompanyName] = useState('');
+  const [scheduleMode, setScheduleMode] = useState<'now' | 'scheduled'>('now');
+  const [scheduledDate, setScheduledDate] = useState<Date>();
+  const [scheduledTime, setScheduledTime] = useState('09:00');
 
   useEffect(() => {
     supabase.from('agents').select('id, name, type').eq('type', 'prospecting').then(({ data }) => {
@@ -155,6 +164,30 @@ export default function NewBlastPage() {
 
     setSaving(true);
 
+    // Convert São Paulo time to UTC if scheduled
+    let scheduledAt: string | null = null;
+    if (scheduleMode === 'scheduled' && scheduledDate) {
+      const [hours, minutes] = scheduledTime.split(':').map(Number);
+      // Create date in São Paulo timezone and convert to UTC
+      // São Paulo is UTC-3, so add 3 hours to get UTC
+      const spDate = new Date(scheduledDate);
+      spDate.setHours(hours, minutes, 0, 0);
+      // Use Intl to get proper offset (handles DST)
+      const spStr = spDate.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' });
+      const utcStr = spDate.toLocaleString('en-US', { timeZone: 'UTC' });
+      const spMs = new Date(spStr).getTime();
+      const utcMs = new Date(utcStr).getTime();
+      const offset = spMs - utcMs;
+      const utcDate = new Date(spDate.getTime() + offset);
+      
+      if (utcDate < new Date()) {
+        toast.error('Data de agendamento não pode ser no passado');
+        setSaving(false);
+        return;
+      }
+      scheduledAt = utcDate.toISOString();
+    }
+
     const { data: campaign, error: campError } = await supabase
       .from('blast_campaigns')
       .insert({
@@ -164,7 +197,8 @@ export default function NewBlastPage() {
         total_contacts: validContacts.length,
         batch_size: parseInt(batchSize),
         interval_seconds: parseInt(intervalSeconds),
-      })
+        ...(scheduledAt ? { scheduled_at: scheduledAt } : {}),
+      } as any)
       .select()
       .single();
 
@@ -253,6 +287,64 @@ export default function NewBlastPage() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Agendamento */}
+          <div className="space-y-3 border-t pt-4">
+            <Label className="text-sm font-medium">Quando enviar?</Label>
+            <RadioGroup value={scheduleMode} onValueChange={(v) => setScheduleMode(v as 'now' | 'scheduled')} className="flex gap-4">
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="now" id="schedule-now" />
+                <Label htmlFor="schedule-now" className="cursor-pointer">Enviar agora (manual)</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="scheduled" id="schedule-later" />
+                <Label htmlFor="schedule-later" className="cursor-pointer">Agendar envio</Label>
+              </div>
+            </RadioGroup>
+
+            {scheduleMode === 'scheduled' && (
+              <div className="flex items-end gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Data</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className={cn("w-[180px] justify-start text-left font-normal", !scheduledDate && "text-muted-foreground")}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {scheduledDate ? format(scheduledDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecione"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={scheduledDate}
+                        onSelect={setScheduledDate}
+                        disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
+                        className={cn("p-3 pointer-events-auto")}
+                        locale={ptBR}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Horário (Brasília)</Label>
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="time"
+                      value={scheduledTime}
+                      onChange={(e) => setScheduledTime(e.target.value)}
+                      className="w-[120px]"
+                    />
+                  </div>
+                </div>
+                {scheduledDate && (
+                  <p className="text-xs text-muted-foreground pb-2">
+                    Agendado para {format(scheduledDate, "dd/MM", { locale: ptBR })} às {scheduledTime} (Horário de Brasília)
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

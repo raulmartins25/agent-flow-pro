@@ -1,0 +1,1 @@
+ALTER TABLE public.blast_campaigns ADD COLUMN scheduled_at timestamptz DEFAULT NULL;
