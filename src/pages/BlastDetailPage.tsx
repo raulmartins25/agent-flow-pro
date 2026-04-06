@@ -115,7 +115,12 @@ export default function BlastDetailPage() {
     );
   }
 
-  const progress = campaign.total_contacts > 0 ? (campaign.sent_count / campaign.total_contacts) * 100 : 0;
+  // Derive stats from contacts array (single source of truth)
+  const sentCount = contacts.filter((c: any) => c.status === 'sent').length;
+  const errorCount = contacts.filter((c: any) => c.status === 'error').length;
+  const pendingCount = contacts.filter((c: any) => c.status === 'pending').length;
+  const totalContacts = campaign.total_contacts || contacts.length;
+  const progress = totalContacts > 0 ? (sentCount / totalContacts) * 100 : 0;
   const statusColors: Record<string, string> = {
     pending: 'bg-muted text-muted-foreground',
     running: 'bg-primary/20 text-primary',
@@ -170,17 +175,17 @@ export default function BlastDetailPage() {
       <Card>
         <CardContent className="pt-6">
           <Progress value={progress} className="h-3 mb-2" />
-          <p className="text-sm text-muted-foreground">{campaign.sent_count} de {campaign.total_contacts} enviados</p>
+          <p className="text-sm text-muted-foreground">{sentCount} de {totalContacts} enviados</p>
         </CardContent>
       </Card>
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Total', value: campaign.total_contacts },
-          { label: 'Enviados', value: campaign.sent_count },
-          { label: 'Erros', value: campaign.error_count },
-          { label: 'Pendentes', value: contacts.filter((c: any) => c.status === 'pending').length },
+          { label: 'Total', value: totalContacts },
+          { label: 'Enviados', value: sentCount },
+          { label: 'Erros', value: errorCount },
+          { label: 'Pendentes', value: pendingCount },
         ].map(s => (
           <Card key={s.label}>
             <CardContent className="pt-4 pb-4 text-center">
