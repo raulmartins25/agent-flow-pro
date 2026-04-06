@@ -65,7 +65,20 @@ export default function InboxPage() {
       .from('conversations')
       .select('*, agents!inner(name, user_id), devices(name)')
       .order('last_message_at', { ascending: false });
-    setConversations((data as any[]) ?? []);
+    const convs = (data as any[]) ?? [];
+    setConversations(convs);
+
+    // Fetch conversation IDs that have at least one user reply
+    const convIds = convs.map(c => c.id);
+    if (convIds.length > 0) {
+      const { data: replied } = await supabase
+        .from('messages')
+        .select('conversation_id')
+        .in('conversation_id', convIds)
+        .eq('role', 'user');
+      const ids = new Set((replied ?? []).map((m: any) => m.conversation_id));
+      setRepliedConvIds(ids);
+    }
     setLoading(false);
   };
 
