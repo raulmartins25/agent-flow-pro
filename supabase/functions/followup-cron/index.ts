@@ -6,6 +6,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/** Normalize BR phone to canonical 13-digit format */
+function canonicalPhone(raw: string): string {
+  let digits = raw.replace(/@.*$/, "").replace(/\D/g, "");
+  if (digits.startsWith("55") && digits.length === 12) {
+    digits = digits.slice(0, 4) + "9" + digits.slice(4);
+  }
+  return digits;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
