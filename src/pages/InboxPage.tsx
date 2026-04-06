@@ -158,6 +158,7 @@ export default function InboxPage() {
       const matchSearch = (c.contact_name || c.contact_number || '').toLowerCase().includes(search.toLowerCase());
       const matchFilter = filter === 'all' ||
         (filter === 'active' && c.status === 'active' && !c.agent_paused) ||
+        (filter === 'replied' && c.status === 'active' && repliedConvIds.has(c.id)) ||
         (filter === 'paused' && c.agent_paused) ||
         (filter === 'transferred' && c.status === 'transferred');
       const matchDevice = deviceFilter === 'all' || c.device_id === deviceFilter;
