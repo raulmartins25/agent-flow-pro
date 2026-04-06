@@ -168,19 +168,25 @@ export default function NewBlastPage() {
     let scheduledAt: string | null = null;
     if (scheduleMode === 'scheduled' && scheduledDate) {
       const [hours, minutes] = scheduledTime.split(':').map(Number);
-      // Create date in São Paulo timezone and convert to UTC
-      // São Paulo is UTC-3, so add 3 hours to get UTC
-      const spDate = new Date(scheduledDate);
-      spDate.setHours(hours, minutes, 0, 0);
-      // Use Intl to get proper offset (handles DST)
-      const spStr = spDate.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' });
-      const utcStr = spDate.toLocaleString('en-US', { timeZone: 'UTC' });
-      const spMs = new Date(spStr).getTime();
-      const utcMs = new Date(utcStr).getTime();
-      const offset = spMs - utcMs;
-      const utcDate = new Date(spDate.getTime() + offset);
-      
-      if (utcDate < new Date()) {
+      // Build an ISO string representing the desired São Paulo time
+      const year = scheduledDate.getFullYear();
+      const month = String(scheduledDate.getMonth() + 1).padStart(2, '0');
+      const day = String(scheduledDate.getDate()).padStart(2, '0');
+      const hh = String(hours).padStart(2, '0');
+      const mm = String(minutes).padStart(2, '0');
+      // Use a reference point to find SP's current UTC offset (handles DST)
+      const refDate = new Date(`${year}-${month}-${day}T12:00:00Z`);
+      const spStr = refDate.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' });
+      const spRefLocal = new Date(spStr);
+      const offsetMs = spRefLocal.getTime() - refDate.getTime();
+      // Create the target date as if it were local, then subtract SP offset to get UTC
+      const targetLocal = new Date(Number(year), scheduledDate.getMonth(), Number(day), hours, minutes, 0, 0);
+      const utcDate = new Date(targetLocal.getTime() - offsetMs);
+
+      // Compare with current time in São Paulo
+      const nowSP = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+      const targetSP = new Date(Number(year), scheduledDate.getMonth(), Number(day), hours, minutes, 0, 0);
+      if (targetSP < nowSP) {
         toast.error('Data de agendamento não pode ser no passado');
         setSaving(false);
         return;
