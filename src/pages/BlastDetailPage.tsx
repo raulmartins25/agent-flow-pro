@@ -143,6 +143,11 @@ export default function BlastDetailPage() {
             <p className="text-sm text-muted-foreground">{campaign.agents?.name || 'Agente'}</p>
           </div>
           <Badge variant="secondary" className={statusColors[campaign.status] || ''}>{campaign.status}</Badge>
+          {campaign.scheduled_at && campaign.status === 'pending' && (
+            <Badge variant="outline" className="text-xs">
+              📅 Agendado para {new Date(campaign.scheduled_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} (Brasília)
+            </Badge>
+          )}
         </div>
         <div className="flex gap-2">
           {campaign.status === 'pending' && (

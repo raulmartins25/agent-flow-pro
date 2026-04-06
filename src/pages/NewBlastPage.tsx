@@ -288,6 +288,64 @@ export default function NewBlastPage() {
               </Select>
             </div>
           </div>
+
+          {/* Agendamento */}
+          <div className="space-y-3 border-t pt-4">
+            <Label className="text-sm font-medium">Quando enviar?</Label>
+            <RadioGroup value={scheduleMode} onValueChange={(v) => setScheduleMode(v as 'now' | 'scheduled')} className="flex gap-4">
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="now" id="schedule-now" />
+                <Label htmlFor="schedule-now" className="cursor-pointer">Enviar agora (manual)</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="scheduled" id="schedule-later" />
+                <Label htmlFor="schedule-later" className="cursor-pointer">Agendar envio</Label>
+              </div>
+            </RadioGroup>
+
+            {scheduleMode === 'scheduled' && (
+              <div className="flex items-end gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Data</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className={cn("w-[180px] justify-start text-left font-normal", !scheduledDate && "text-muted-foreground")}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {scheduledDate ? format(scheduledDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecione"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={scheduledDate}
+                        onSelect={setScheduledDate}
+                        disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
+                        className={cn("p-3 pointer-events-auto")}
+                        locale={ptBR}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Horário (Brasília)</Label>
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="time"
+                      value={scheduledTime}
+                      onChange={(e) => setScheduledTime(e.target.value)}
+                      className="w-[120px]"
+                    />
+                  </div>
+                </div>
+                {scheduledDate && (
+                  <p className="text-xs text-muted-foreground pb-2">
+                    Agendado para {format(scheduledDate, "dd/MM", { locale: ptBR })} às {scheduledTime} (Horário de Brasília)
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
