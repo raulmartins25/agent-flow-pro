@@ -258,12 +258,12 @@ export default function InboxPage() {
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-sm">
-                    {(c.contact_name || c.contact_number || '?')[0].toUpperCase()}
+                    {(c.contact_name || displayPhone(c.contact_number) || '?')[0].toUpperCase()}
                   </div>
                   <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${statusColor(c)}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{c.contact_name || c.contact_number}</p>
+                  <p className="font-medium text-sm truncate">{c.contact_name || displayPhone(c.contact_number)}</p>
                   <p className="text-xs text-muted-foreground truncate">{(c as any).agents?.name || 'Agente'}</p>
                 </div>
                 {c.last_message_at && (
@@ -292,8 +292,8 @@ export default function InboxPage() {
             <div className="h-14 border-b flex items-center justify-between px-4 bg-background">
               <div className="flex items-center gap-3">
                 <div>
-                  <p className="font-medium text-sm">{activeConv.contact_name || activeConv.contact_number}</p>
-                  <p className="text-xs text-muted-foreground">{activeConv.contact_number}</p>
+                  <p className="font-medium text-sm">{activeConv.contact_name || displayPhone(activeConv.contact_number)}</p>
+                  <p className="text-xs text-muted-foreground">{displayPhone(activeConv.contact_number)}</p>
                 </div>
                 {(activeConv as any).devices?.name && (
                   <Badge variant="outline" className="text-xs gap-1">
