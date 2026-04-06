@@ -1,55 +1,63 @@
 
 
-# Corrigir nome no resumo + instrução de nome no prompt
+# Encerrar conversa quando lead demonstra desinteresse
 
-## Mudanças em `supabase/functions/process-message/index.ts`
+## Diagnóstico
 
-### Bug 1 — Nome no resumo vem como JID
+O prompt anti-ban só detecta palavras agressivas ("para", "stop", "me tira", "spam"). Quando o lead diz educadamente "Não tenho interesse, obrigada", a IA responde mas **não emite END_CONVERSATION**. A conversa fica com status `active` e o `followup-cron` envia follow-up normalmente — importunando o lead.
 
-**Problema**: Linha 226 faz `const contactName = contact_name || "Contato"` — se `contact_name` vier como `5562...@s.whatsapp.net`, o resumo de transferência mostra isso como nome.
+## Correção
 
-**Correção**: Substituir linhas 224-229 para limpar o nome:
+### 1. `src/lib/compilePrompt.ts` — Ampliar regra anti-ban
 
-```typescript
-let systemPrompt = agent.prompt_compiled;
+Expandir a seção PROTEÇÃO ANTI-BAN para incluir sinais de desinteresse educado:
 
-// Fetch contact_name from conversation record too
-const { data: convData } = await supabase
-  .from("conversations")
-  .select("contact_name")
-  .eq("id", conversation_id)
-  .single();
+```
+PROTEÇÃO ANTI-BAN:
+Se o lead demonstrar irritação OU desinteresse, incluindo frases como:
+- "para", "stop", "me tira", "não quero", "me bloqueia", "spam"
+- "não tenho interesse", "sem interesse", "não preciso", "não quero receber", 
+  "não me interessa", "obrigado mas não", "obrigada mas não"
 
-const rawContactName = convData?.contact_name || contact_name || null;
-const cleanContactName = rawContactName && 
-  !rawContactName.includes('@') && 
-  !/^\d{8,}$/.test(rawContactName.trim())
-    ? rawContactName.trim()
-    : null;
-
-const nameInstruction = cleanContactName
-  ? `\n\nINFORMAÇÃO DO CONTATO:\nO nome do contato é "${cleanContactName}" (obtido automaticamente do WhatsApp). Use-o para personalizar, mas NÃO peça o nome — você já o tem.`
-  : `\n\nINFORMAÇÃO DO CONTATO:\nO nome do contato não está disponível. NÃO faça perguntas para descobrir o nome — não é necessário para a qualificação.`;
-
-systemPrompt += nameInstruction;
+1. Responda educadamente encerrando (ex: "Entendido! Caso mude de ideia, estaremos à disposição!")
+2. Encerre o atendimento imediatamente.
+3. Emita o token: END_CONVERSATION
+4. NUNCA tente reconverter ou enviar follow-up.
 ```
 
-Isso resolve o Bug 2 também — a instrução agora diz explicitamente para NÃO perguntar o nome em nenhum caso.
+### 2. `supabase/functions/followup-cron/index.ts` — Segurança extra
 
-### Bug 1 (parte 2) — Resumo de transferência
+Adicionar filtro para não enviar follow-up em conversas com status `closed`:
 
-Na montagem do summary (linhas 354-375), substituir `contactName` por `cleanContactName || 'Não informado'`:
+Já filtra por `status: active`, mas adicionar checagem se a última mensagem do **lead** (role=user) contém sinais de desinteresse como camada de segurança extra:
 
-- Linha 355: `.replace(/\{\{nome_contato\}\}/g, cleanContactName || 'Não informado')`
-- Linha 371: `summary += \`*Nome:* ${cleanContactName || 'Não informado'}\n\``
+```typescript
+// Após pegar lastMsg, verificar se o lead mostrou desinteresse
+const { data: lastUserMsg } = await supabase
+  .from("messages")
+  .select("content")
+  .eq("conversation_id", conv.id)
+  .eq("role", "user")
+  .order("created_at", { ascending: false })
+  .limit(1);
 
-### Variável `contactName` usada no restante
+const userText = (lastUserMsg?.[0]?.content || "").toLowerCase();
+const disinterestWords = ["não tenho interesse", "sem interesse", "não preciso", 
+  "não quero", "não me interessa", "para", "stop", "spam"];
+if (disinterestWords.some(w => userText.includes(w))) {
+  // Fechar conversa e pular follow-up
+  await supabase.from("conversations").update({ status: "closed" }).eq("id", conv.id);
+  continue;
+}
+```
 
-A variável `contactName` (linha 226) é usada em dois blocos: o system prompt e o summary. Ambos serão atualizados. Vou remover a variável antiga e usar `cleanContactName` nos dois lugares.
-
-## Arquivo impactado
+## Arquivos impactados
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/functions/process-message/index.ts` | Limpar nome do contato (remover JID/números puros) + instrução dinâmica no prompt |
+| `src/lib/compilePrompt.ts` | Ampliar regra anti-ban para incluir desinteresse educado |
+| `supabase/functions/followup-cron/index.ts` | Checagem de segurança contra follow-up em leads desinteressados |
+
+## Nota importante
+Agentes existentes precisarão **recompilar o prompt** (salvar novamente no wizard) para a nova instrução entrar em efeito.
 
