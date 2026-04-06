@@ -1,43 +1,70 @@
 
+# Fazer a blacklist realmente parar toda a automação
 
-# Corrigir Blacklist — normalização + vincular a dispositivo
+## Diagnóstico confirmado
+Do I know what the issue is? Sim.
 
-## Bug 1 — Blacklist não funciona
+- A mensagem do print (“Oi! Só passando para verificar se tem alguma dúvida...”) vem do `followup-cron`, não do modelo.
+- Conferi o código e o estado atual: o número já está na blacklist do dispositivo correto, mas a conversa continuou `active` e recebeu follow-up depois disso.
+- Hoje a blacklist barra só parte do fluxo:
+  - `evolution-webhook`
+  - `blast-processor`
+- Ela ainda **não barra**:
+  - `followup-cron`
+  - `process-message`
+- Além disso, o branch de blacklist no `evolution-webhook` tem um bug de runtime: ele usa `normalizedPhone`, variável que não existe.
 
-**Causa raiz**: O número é salvo no banco como digitado (ex: `556299542888` — 12 dígitos). O webhook normaliza com `canonicalPhone()` que insere o 9 (→ `5562999542888` — 13 dígitos). A comparação falha porque os formatos são diferentes.
+## O que vou corrigir
 
-**Correção**: Tanto no webhook quanto no blast-processor, comparar o phone da blacklist também canonicalizado. Além disso, ao **salvar** na UI, aplicar `canonicalPhone()` para garantir formato 13 dígitos.
+### 1) `supabase/functions/followup-cron/index.ts`
+Adicionar a checagem de blacklist antes de qualquer regra de follow-up.
 
-## Bug 2 — Blacklist deve ser por dispositivo (instância)
+Se o número da conversa estiver na blacklist do mesmo usuário + mesmo dispositivo:
+- não enviar follow-up
+- atualizar a conversa para:
+  - `status: "closed"`
+  - `agent_paused: true`
+  - `is_waiting_reply: false`
+- seguir para a próxima conversa
 
-**Problema**: Atualmente `blacklist` tem apenas `user_id` + `phone`. O usuário quer que a blacklist seja por número/dispositivo específico.
+Isso resolve exatamente o caso do print.
 
-**Correção**:
+### 2) `supabase/functions/process-message/index.ts`
+Adicionar uma guarda global de blacklist no início da função.
 
-### Migration SQL
-- Adicionar coluna `device_id uuid REFERENCES devices(id) ON DELETE CASCADE` à tabela `blacklist`
-- Dropar constraint unique atual e criar nova: `UNIQUE(user_id, device_id, phone)`
+Se o contato estiver bloqueado:
+- encerrar/pausar a conversa
+- retornar imediatamente
+- não chamar LLM
+- não enviar texto
+- não enviar mídia
+- não enviar transferência
+- não gravar nova mensagem do assistant
 
-### Edge Functions
+Também vou repetir essa verificação imediatamente antes dos envios externos, para cobrir race condition caso o número entre na blacklist enquanto a função já está rodando.
 
-**`evolution-webhook/index.ts`**: Na checagem de blacklist, adicionar `.eq("device_id", device.id)` além do `user_id`. Comparar usando `canonicalPhone()` no phone armazenado também (usar `.or()` com ambos os formatos).
+### 3) `supabase/functions/evolution-webhook/index.ts`
+Corrigir o branch atual da blacklist:
+- trocar o log para usar a variável certa (`canonicalRemote`)
+- ao detectar blacklist, fechar/pausar eventual conversa aberta daquele número/dispositivo antes de retornar `200`
 
-**`blast-processor/index.ts`**: Buscar o `device_id` da campanha (via agent → device_id) e filtrar blacklist por `device_id`. Usar `canonicalPhone` na comparação.
+## Resultado esperado
+Depois disso, número na blacklist não receberá mais:
+- resposta da IA
+- follow-up automático
+- disparo futuro
 
-### UI — `src/pages/SettingsPage.tsx`
-
-1. Carregar lista de devices do usuário para um select
-2. Adicionar select "Dispositivo" obrigatório no modal de adicionar número
-3. Mostrar coluna "Dispositivo" na tabela de blacklist
-4. Filtrar blacklist por device selecionado (ou mostrar todos com label do device)
-5. Na importação CSV, exigir seleção de device antes de importar
+E se já existir uma conversa aberta com esse número, ela será encerrada assim que qualquer fluxo backend tocar nela.
 
 ## Arquivos impactados
-
 | Arquivo | Mudança |
 |---|---|
-| Migration SQL | Adicionar `device_id` à `blacklist`, nova constraint unique |
-| `supabase/functions/evolution-webhook/index.ts` | Filtrar blacklist por `device_id` + canonicalizar comparação |
-| `supabase/functions/blast-processor/index.ts` | Filtrar blacklist por `device_id` do agent |
-| `src/pages/SettingsPage.tsx` | Select de device, coluna device na tabela, normalização canonical ao salvar |
+| `supabase/functions/followup-cron/index.ts` | Bloquear follow-up para números em blacklist e encerrar conversa |
+| `supabase/functions/process-message/index.ts` | Guard global de blacklist antes de qualquer resposta/envio |
+| `supabase/functions/evolution-webhook/index.ts` | Corrigir branch da blacklist e encerrar conversa aberta |
 
+## Detalhes técnicos
+- Não precisa migration.
+- Não precisa mudar frontend.
+- Vou usar a mesma normalização canônica de telefone nos 3 pontos para evitar erro entre JID / 12 dígitos / 13 dígitos.
+- A regra sempre será: `user_id` + `device_id` + telefone canonicalizado.
