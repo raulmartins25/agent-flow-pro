@@ -1,42 +1,26 @@
 
 
-# Correção: Mídia na transferência + IA pós-transferência
+# Remover "@s.whatsapp.net" apenas na exibição do Inbox
 
-## Bug 1 — SEND_MEDIA ignorado quando há TRANSFER_LEAD
+## Importante
+A mudança é **apenas visual** — nenhum dado no banco será alterado. O `contact_number` original permanece intacto para todas as funções (envio de mensagem, webhook, blast, etc.).
 
-**Problema**: Nas linhas 457-501, o processamento de `SEND_MEDIA` acontece DEPOIS da transferência, sem verificar se `shouldTransfer` é true. A IA às vezes inclui `SEND_MEDIA` na mesma resposta de transferência.
+## Mudança
 
-**Correção**: Mover a lógica de SEND_MEDIA (linhas 457-501) e a detecção programática de mídia (linhas 503-578) para dentro de um bloco `if (!shouldTransfer)`. O `cleanResponse` continua removendo os tokens de qualquer forma.
+### `src/pages/InboxPage.tsx`
 
+Adicionar helper de exibição no topo do componente:
 ```typescript
-// Limpar tokens do texto SEMPRE
-cleanResponse = cleanResponse.replace(/SEND_MEDIA:[a-f0-9-]+/gi, "").replace(/\s{2,}/g, " ").trim();
-
-// Processar envio de mídia APENAS se NÃO for transferência
-if (!shouldTransfer) {
-  // lógica de SEND_MEDIA tokens e detecção programática
-}
+const displayPhone = (raw: string) => raw?.replace(/@s\.whatsapp\.net$/i, '') || '';
 ```
 
-## Bug 2 — IA continua respondendo após transferência
+Aplicar `displayPhone()` nos pontos de **renderização** apenas:
+- Lista de conversas: texto do nome/número e inicial do avatar
+- Header do chat: nome e número do contato
 
-**Problema**: O early return para `transferred` existe (linhas 119-191) e funciona. Porém, olhando a imagem, a mensagem "Entendo! É com você que eu falo sobre o espaço físico da clínica?" foi enviada ANTES da conversa ser marcada como transferred — ela é parte da mesma resposta LLM que contém TRANSFER_LEAD.
-
-**Causa real**: A IA gera texto + TRANSFER_LEAD na mesma resposta. O texto da IA é enviado ao lead (linha 587-591) E a transferência acontece. O problema é que o `cleanResponse` contém esse texto "extra" de qualificação.
-
-**Correção**: Quando `shouldTransfer` é true, substituir o `cleanResponse` por uma mensagem fixa de encerramento, ignorando o que a IA escreveu:
-
-```typescript
-if (shouldTransfer && agentFull?.transfer_number) {
-  // Substituir resposta da IA por mensagem de encerramento padronizada
-  cleanResponse = "Perfeito! Vou passar suas informações para nossa equipe, que entrará em contato em breve. Obrigado pelo seu tempo!";
-  // ... resto da lógica de transferência
-}
-```
-
-## Arquivo impactado
+Nenhuma query, insert, update ou lógica de negócio será alterada.
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/functions/process-message/index.ts` | Bloquear SEND_MEDIA quando shouldTransfer; substituir resposta por msg fixa na transferência |
+| `src/pages/InboxPage.tsx` | Helper `displayPhone` + aplicar em ~5 pontos de exibição |
 
