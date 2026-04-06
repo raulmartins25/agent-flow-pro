@@ -157,6 +157,7 @@ export type Database = {
           id: string
           interval_seconds: number
           name: string
+          scheduled_at: string | null
           sent_count: number
           started_at: string | null
           status: Database["public"]["Enums"]["campaign_status"]
@@ -172,6 +173,7 @@ export type Database = {
           id?: string
           interval_seconds?: number
           name: string
+          scheduled_at?: string | null
           sent_count?: number
           started_at?: string | null
           status?: Database["public"]["Enums"]["campaign_status"]
@@ -187,6 +189,7 @@ export type Database = {
           id?: string
           interval_seconds?: number
           name?: string
+          scheduled_at?: string | null
           sent_count?: number
           started_at?: string | null
           status?: Database["public"]["Enums"]["campaign_status"]
