@@ -6,6 +6,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const PROCESSING_LOCK_PREFIX = "processing:";
+const PROCESSING_LOCK_TTL_MS = 10 * 60 * 1000;
+
 /** Normalize BR phone to canonical 13-digit format: 55 + 2-digit DDD + 9 + 8 digits */
 function canonicalPhone(raw: string): string {
   let digits = raw.replace(/@.*$/, "").replace(/\D/g, "");
@@ -55,20 +58,40 @@ serve(async (req) => {
 
     const batchSize = campaign.batch_size || 10;
     const intervalSeconds = campaign.interval_seconds || 45;
+    const executionId = crypto.randomUUID();
+    const staleClaimBefore = new Date(Date.now() - PROCESSING_LOCK_TTL_MS).toISOString();
+
+    await supabase
+      .from("blast_contacts")
+      .update({ sent_at: null, error_message: null })
+      .eq("campaign_id", campaign_id)
+      .eq("status", "pending")
+      .like("error_message", `${PROCESSING_LOCK_PREFIX}%`)
+      .lt("sent_at", staleClaimBefore);
 
     const { data: contacts } = await supabase
       .from("blast_contacts")
       .select("*")
       .eq("campaign_id", campaign_id)
       .eq("status", "pending")
+      .is("sent_at", null)
       .limit(batchSize);
 
     if (!contacts || contacts.length === 0) {
-      await supabase
-        .from("blast_campaigns")
-        .update({ status: "completed", completed_at: new Date().toISOString() })
-        .eq("id", campaign_id);
-      return new Response(JSON.stringify({ ok: true, message: "No pending contacts" }), {
+      const { count: pendingCount } = await supabase
+        .from("blast_contacts")
+        .select("id", { count: "exact", head: true })
+        .eq("campaign_id", campaign_id)
+        .eq("status", "pending");
+
+      if (!pendingCount || pendingCount === 0) {
+        await supabase
+          .from("blast_campaigns")
+          .update({ status: "completed", completed_at: new Date().toISOString() })
+          .eq("id", campaign_id);
+      }
+
+      return new Response(JSON.stringify({ ok: true, message: pendingCount ? "Batch already being processed" : "No pending contacts" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -99,7 +122,7 @@ serve(async (req) => {
       .from("blast_contacts")
       .select("phone")
       .eq("campaign_id", campaign_id)
-      .eq("status", "sent");
+      .not("sent_at", "is", null);
     const sentPhones = new Set<string>(
       (alreadySent || []).map((c: any) => canonicalPhone(c.phone))
     );
@@ -110,14 +133,41 @@ serve(async (req) => {
       if (sentPhones.has(normalizedCheck)) {
         await supabase
           .from("blast_contacts")
-          .update({ status: "sent", sent_at: new Date().toISOString() })
-          .eq("id", contact.id);
+          .update({ status: "sent", sent_at: new Date().toISOString(), error_message: null })
+          .eq("id", contact.id)
+          .eq("status", "pending");
         sentCount++;
         console.log("Skipped duplicate phone:", normalizedCheck);
         continue;
       }
-      sentPhones.add(normalizedCheck);
+
       try {
+        const claimStartedAt = new Date().toISOString();
+        const { data: claimedContact, error: claimError } = await supabase
+          .from("blast_contacts")
+          .update({
+            sent_at: claimStartedAt,
+            error_message: `${PROCESSING_LOCK_PREFIX}${executionId}`,
+          })
+          .eq("id", contact.id)
+          .eq("campaign_id", campaign_id)
+          .eq("status", "pending")
+          .is("sent_at", null)
+          .select("id")
+          .maybeSingle();
+
+        if (claimError) {
+          console.error("Contact claim error:", claimError);
+          continue;
+        }
+
+        if (!claimedContact) {
+          console.log("Contact already claimed, skipping:", contact.id);
+          continue;
+        }
+
+        sentPhones.add(normalizedCheck);
+
         const { data: currentCampaign } = await supabase
           .from("blast_campaigns")
           .select("status")
@@ -125,6 +175,11 @@ serve(async (req) => {
           .single();
 
         if (currentCampaign?.status === "paused" || currentCampaign?.status === "completed") {
+          await supabase
+            .from("blast_contacts")
+            .update({ sent_at: null, error_message: null })
+            .eq("id", contact.id)
+            .eq("status", "pending");
           break;
         }
 
@@ -207,26 +262,25 @@ serve(async (req) => {
             });
           }
 
+          const mergedMetadata = contact.metadata && typeof contact.metadata === "object" && !Array.isArray(contact.metadata)
+            ? { ...contact.metadata, message_variation_index: randomIndex }
+            : { message_variation_index: randomIndex };
+
           await supabase
             .from("blast_contacts")
-            .update({ status: "sent", sent_at: new Date().toISOString() })
+            .update({
+              status: "sent",
+              sent_at: new Date().toISOString(),
+              error_message: null,
+              metadata: mergedMetadata,
+            } as any)
             .eq("id", contact.id);
-
-          // Save variation metadata (non-blocking)
-          try {
-            await supabase
-              .from("blast_contacts")
-              .update({ metadata: { message_variation_index: randomIndex } } as any)
-              .eq("id", contact.id);
-          } catch (e) {
-            console.log("metadata não salvo, continuando:", e);
-          }
           sentCount++;
         } else {
           const errText = await res.text();
           await supabase
             .from("blast_contacts")
-            .update({ status: "error", error_message: errText.slice(0, 255) })
+            .update({ status: "error", sent_at: null, error_message: errText.slice(0, 255) })
             .eq("id", contact.id);
           errorCount++;
         }
@@ -247,7 +301,7 @@ serve(async (req) => {
         console.error("Contact send error:", e);
         await supabase
           .from("blast_contacts")
-          .update({ status: "error", error_message: (e as Error).message?.slice(0, 255) })
+          .update({ status: "error", sent_at: null, error_message: (e as Error).message?.slice(0, 255) })
           .eq("id", contact.id);
         errorCount++;
       }
