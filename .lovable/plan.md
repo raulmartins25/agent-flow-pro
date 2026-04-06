@@ -1,62 +1,80 @@
 
 
-# Agendamento de Disparos + Verificação de Lote/Intervalo
+# Variações de Mensagem de Prospecção
 
-## Análise do estado atual
+## Resumo
+Adicionar suporte a múltiplas variações da mensagem de disparo (máx 5), com rotação aleatória no blast-processor, geração automática via IA, e indicador de similaridade.
 
-**Lote e intervalo**: O blast-processor já usa `campaign.batch_size` e `campaign.interval_seconds` corretamente (linhas 56-57, 64, 184-187). O delay tem variação de ±20% para anti-ban. Porém há um problema: **o processor só envia 1 lote por invocação** (`.limit(batchSize)`). Se há 100 contatos e lote = 10, precisa ser chamado 10 vezes. Não há mecanismo automático de re-invocação — dependeria de cliques manuais no "Continuar".
-
-**Agendamento**: Não existe. A campanha só inicia quando o usuário clica "Iniciar" manualmente.
-
-## Solução
-
-### 1. Migração — Adicionar coluna `scheduled_at` em `blast_campaigns`
+## Migração SQL
 
 ```sql
-ALTER TABLE blast_campaigns ADD COLUMN scheduled_at timestamptz DEFAULT NULL;
+ALTER TABLE agent_config ADD COLUMN IF NOT EXISTS prospecting_messages jsonb;
+ALTER TABLE blast_contacts ADD COLUMN IF NOT EXISTS metadata jsonb;
 ```
 
-Quando `NULL`, disparo é imediato (comportamento atual). Quando preenchido, o cron deve iniciar no horário.
+## `src/stores/agentStore.ts`
 
-### 2. `src/pages/NewBlastPage.tsx` — Campo de agendamento
+- Adicionar campo `prospecting_messages: string[]` à interface (default `[]`)
+- Manter `first_prospecting_message` para compatibilidade
+- No `initialWizardData`, inicializar `prospecting_messages` com `['Olá {{nome_contato}}! ...']`
 
-Adicionar opção "Enviar agora" vs "Agendar para":
-- Radio/toggle entre imediato e agendado
-- Se agendado: date picker + time picker
-- Timezone fixo: America/Sao_Paulo (mostrar label "Horário de Brasília")
-- Salvar `scheduled_at` como UTC no banco (converter de SP → UTC)
-- Validação: não permitir data no passado
+## `src/components/wizard/WizardStep3.tsx`
 
-### 3. `src/pages/BlastDetailPage.tsx` — Mostrar agendamento
+**Para tipo receptive**: sem mudança (textarea simples de welcome_message).
 
-- Se `scheduled_at` existe e status é `pending`: mostrar badge "Agendado para DD/MM às HH:MM (Brasília)"
-- Botão "Iniciar agora" permanece disponível para override manual
+**Para tipo prospecting**: substituir textarea único por:
 
-### 4. `supabase/functions/blast-cron/index.ts` — Nova edge function cron
+1. **Header**: "Variações da mensagem de disparo" + subtítulo explicativo + badge "Recomendado: mínimo 3 variações"
 
-Edge function que roda a cada minuto via pg_cron:
-- Busca campanhas com `status = 'pending'` e `scheduled_at <= NOW()`
-- Para cada uma, invoca `blast-processor` com `campaign_id`
-- Isso também resolve o problema de lotes múltiplos: o cron pode re-invocar campanhas `running` que ainda têm contatos pendentes
+2. **Lista de variações**: Cada item com número, textarea e botão X (mín 1, máx 5). Botão "+ Adicionar variação" (some ao atingir 5)
 
-### 5. `supabase/functions/blast-processor/index.ts` — Auto-continuação
+3. **Botão "Gerar variações com IA"**: 
+   - Sem mensagem → toast de erro
+   - Com mensagem → chama edge function `simulate-chat` ou cria chamada à Lovable AI gateway via edge function para gerar variações
+   - Usa Lovable AI (LOVABLE_API_KEY já existe) via nova edge function `generate-variations`
+   - Loading state no botão
 
-Após processar um lote, se ainda existem contatos pendentes e status é `running`:
-- O processor **se auto-invoca** novamente (fetch para si mesmo) com delay
-- Isso garante que todos os lotes são processados sem intervenção manual
+4. **Indicador de similaridade**: Badge verde "Boa variação" (>40% palavras diferentes) ou amarelo "Muito similar" (<40%) — cálculo simples no frontend
 
-### 6. Cron job via pg_cron
+5. **Preview**: Mostra preview da variação em foco (ou variação 1 por default)
 
-Criar job que roda a cada minuto para verificar campanhas agendadas e campanhas running com pendentes.
+## Edge function `supabase/functions/generate-variations/index.ts`
+
+- Recebe `{ message: string, count: number }`
+- Chama Lovable AI gateway com prompt para gerar variações
+- Retorna array de strings
+
+## `supabase/functions/blast-processor/index.ts`
+
+- Atualizar select para incluir `prospecting_messages` no join de `agent_config`
+- Lógica de fallback:
+  ```
+  const messages = agentConfig.prospecting_messages?.length > 0
+    ? agentConfig.prospecting_messages
+    : agentConfig.first_prospecting_message
+      ? [agentConfig.first_prospecting_message]
+      : null
+  ```
+- Se null → marcar campanha como erro
+- Selecionar variação aleatória: `messages[Math.floor(Math.random() * messages.length)]`
+- Replace de variáveis com `.trim() || ''` fallback
+- Salvar `metadata: { message_variation_index }` em try/catch separado
+
+## `src/pages/AgentWizard.tsx`
+
+- No `loadAgent`, converter `config.prospecting_messages` ou fallback de `first_prospecting_message` para array
+- No `handleSave`, salvar `prospecting_messages` no `agent_config` (insert e update)
+- Atualizar validação step 2: checar que pelo menos 1 variação tem texto
+- Continuar salvando `first_prospecting_message` como `prospecting_messages[0]` para compatibilidade
 
 ## Arquivos impactados
 
 | Arquivo | Mudança |
 |---|---|
-| migração SQL | Adicionar `scheduled_at` à `blast_campaigns` |
-| `src/pages/NewBlastPage.tsx` | Campo de agendamento com date/time picker (timezone SP) |
-| `src/pages/BlastDetailPage.tsx` | Exibir info de agendamento |
-| `supabase/functions/blast-cron/index.ts` | Nova função cron para disparos agendados + continuação |
-| `supabase/functions/blast-processor/index.ts` | Auto-continuação após processar lote |
-| pg_cron insert | Agendar blast-cron a cada minuto |
+| Migração SQL | `prospecting_messages` jsonb + `metadata` jsonb |
+| `src/stores/agentStore.ts` | Novo campo `prospecting_messages: string[]` |
+| `src/components/wizard/WizardStep3.tsx` | UI de variações + IA + similaridade |
+| `supabase/functions/generate-variations/index.ts` | Nova edge function para gerar variações via Lovable AI |
+| `supabase/functions/blast-processor/index.ts` | Rotação aleatória + fallback + metadata |
+| `src/pages/AgentWizard.tsx` | Load/save de prospecting_messages + validação |
 
