@@ -41,6 +41,7 @@ export default function InboxPage() {
   const { conversationId } = useParams();
   const user = useAuthStore((s) => s.user);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [repliedConvIds, setRepliedConvIds] = useState<Set<string>>(new Set());
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [search, setSearch] = useState('');
