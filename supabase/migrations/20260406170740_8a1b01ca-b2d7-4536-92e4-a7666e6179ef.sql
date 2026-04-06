@@ -1,0 +1,1 @@
+UPDATE chip_warmups SET status = 'disconnected' WHERE id IN ('1f80f04b-38ba-4584-b013-eb7436a88ac1', 'a839e11f-7ed6-412b-b109-847d3247b415');
