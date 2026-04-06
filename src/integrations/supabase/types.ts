@@ -25,6 +25,7 @@ export type Database = {
           id: string
           objection_handlers: Json | null
           product_service_description: string | null
+          prospecting_messages: Json | null
           qualification_questions: Json | null
           segment: string | null
           tone: Database["public"]["Enums"]["tone_type"]
@@ -42,6 +43,7 @@ export type Database = {
           id?: string
           objection_handlers?: Json | null
           product_service_description?: string | null
+          prospecting_messages?: Json | null
           qualification_questions?: Json | null
           segment?: string | null
           tone?: Database["public"]["Enums"]["tone_type"]
@@ -59,6 +61,7 @@ export type Database = {
           id?: string
           objection_handlers?: Json | null
           product_service_description?: string | null
+          prospecting_messages?: Json | null
           qualification_questions?: Json | null
           segment?: string | null
           tone?: Database["public"]["Enums"]["tone_type"]
@@ -212,6 +215,7 @@ export type Database = {
           custom_vars: Json | null
           error_message: string | null
           id: string
+          metadata: Json | null
           name: string | null
           phone: string
           sent_at: string | null
@@ -222,6 +226,7 @@ export type Database = {
           custom_vars?: Json | null
           error_message?: string | null
           id?: string
+          metadata?: Json | null
           name?: string | null
           phone: string
           sent_at?: string | null
@@ -232,6 +237,7 @@ export type Database = {
           custom_vars?: Json | null
           error_message?: string | null
           id?: string
+          metadata?: Json | null
           name?: string | null
           phone?: string
           sent_at?: string | null
