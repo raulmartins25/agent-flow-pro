@@ -41,10 +41,11 @@ export default function InboxPage() {
   const { conversationId } = useParams();
   const user = useAuthStore((s) => s.user);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [repliedConvIds, setRepliedConvIds] = useState<Set<string>>(new Set());
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'active' | 'paused' | 'transferred'>('all');
+  const [filter, setFilter] = useState<'all' | 'active' | 'paused' | 'transferred' | 'replied'>('all');
   const [deviceFilter, setDeviceFilter] = useState<string>('all');
   const [devices, setDevices] = useState<Device[]>([]);
   const [input, setInput] = useState('');
@@ -64,7 +65,20 @@ export default function InboxPage() {
       .from('conversations')
       .select('*, agents!inner(name, user_id), devices(name)')
       .order('last_message_at', { ascending: false });
-    setConversations((data as any[]) ?? []);
+    const convs = (data as any[]) ?? [];
+    setConversations(convs);
+
+    // Fetch conversation IDs that have at least one user reply
+    const convIds = convs.map(c => c.id);
+    if (convIds.length > 0) {
+      const { data: replied } = await supabase
+        .from('messages')
+        .select('conversation_id')
+        .in('conversation_id', convIds)
+        .eq('role', 'user');
+      const ids = new Set((replied ?? []).map((m: any) => m.conversation_id));
+      setRepliedConvIds(ids);
+    }
     setLoading(false);
   };
 
@@ -144,6 +158,7 @@ export default function InboxPage() {
       const matchSearch = (c.contact_name || c.contact_number || '').toLowerCase().includes(search.toLowerCase());
       const matchFilter = filter === 'all' ||
         (filter === 'active' && c.status === 'active' && !c.agent_paused) ||
+        (filter === 'replied' && c.status === 'active' && repliedConvIds.has(c.id)) ||
         (filter === 'paused' && c.agent_paused) ||
         (filter === 'transferred' && c.status === 'transferred');
       const matchDevice = deviceFilter === 'all' || c.device_id === deviceFilter;
@@ -201,11 +216,11 @@ export default function InboxPage() {
             <Input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Buscar..." className="pl-9 h-9" />
           </div>
-          <div className="flex gap-1">
-            {(['all', 'active', 'paused', 'transferred'] as const).map(f => (
+          <div className="flex gap-1 flex-wrap">
+            {(['all', 'active', 'replied', 'paused', 'transferred'] as const).map(f => (
               <button key={f} onClick={() => setFilter(f)}
                 className={`text-xs px-2 py-1 rounded-md transition-colors ${filter === f ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
-                {f === 'all' ? 'Todas' : f === 'active' ? 'Ativas' : f === 'paused' ? 'Pausadas' : 'Transferidas'}
+                {f === 'all' ? 'Todas' : f === 'active' ? 'Ativas' : f === 'replied' ? 'Em Conversa' : f === 'paused' ? 'Pausadas' : 'Transferidas'}
               </button>
             ))}
           </div>
