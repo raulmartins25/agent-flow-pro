@@ -132,14 +132,17 @@ serve(async (req) => {
       const normalizedCheck = canonicalPhone(contact.phone);
 
       // --- BLACKLIST CHECK ---
-      const { data: blacklisted } = await supabase
+      const { data: blRows } = await supabase
         .from("blacklist")
-        .select("id")
+        .select("id, phone")
         .eq("user_id", campaign.user_id)
-        .eq("phone", normalizedCheck)
-        .maybeSingle();
+        .eq("device_id", device.id);
 
-      if (blacklisted) {
+      const isBlacklisted = (blRows || []).some(
+        (b: any) => canonicalPhone(b.phone) === normalizedCheck
+      );
+
+      if (isBlacklisted) {
         await supabase.from("blast_contacts").update({
           status: "error",
           error_message: "Número na blacklist",

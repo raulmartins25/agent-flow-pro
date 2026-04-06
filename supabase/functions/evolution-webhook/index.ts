@@ -93,13 +93,16 @@ serve(async (req) => {
       }
 
       // --- BLACKLIST CHECK ---
-      const normalizedPhone = remoteJid.replace(/@.*$/, "").replace(/\D/g, "");
-      const { data: blacklisted } = await supabase
+      const canonicalRemote = canonicalPhone(rawJid);
+      const { data: blRows } = await supabase
         .from("blacklist")
-        .select("id")
+        .select("id, phone")
         .eq("user_id", agent.user_id)
-        .or(`phone.eq.${normalizedPhone},phone.eq.${remoteJid}`)
-        .maybeSingle();
+        .eq("device_id", device.id);
+
+      const blacklisted = (blRows || []).some(
+        (b: any) => canonicalPhone(b.phone) === canonicalRemote
+      );
 
       if (blacklisted) {
         console.log(`Número ${normalizedPhone} está na blacklist — ignorando`);
