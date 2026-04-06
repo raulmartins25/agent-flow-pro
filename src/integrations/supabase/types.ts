@@ -153,6 +153,7 @@ export type Database = {
       blacklist: {
         Row: {
           created_at: string | null
+          device_id: string | null
           id: string
           label: string | null
           phone: string
@@ -160,6 +161,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          device_id?: string | null
           id?: string
           label?: string | null
           phone: string
@@ -167,12 +169,21 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          device_id?: string | null
           id?: string
           label?: string | null
           phone?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "blacklist_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       blast_campaigns: {
         Row: {

@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
@@ -17,7 +18,23 @@ interface BlacklistEntry {
   id: string;
   phone: string;
   label: string | null;
+  device_id: string | null;
   created_at: string;
+}
+
+interface Device {
+  id: string;
+  name: string;
+  instance_name: string;
+}
+
+/** Normalize BR phone to canonical 13-digit format: 55 + 2-digit DDD + 9 + 8 digits */
+function canonicalPhone(raw: string): string {
+  let digits = raw.replace(/@.*$/, '').replace(/\D/g, '');
+  if (digits.startsWith('55') && digits.length === 12) {
+    digits = digits.slice(0, 4) + '9' + digits.slice(4);
+  }
+  return digits;
 }
 
 export default function SettingsPage() {
@@ -25,12 +42,17 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<any>(null);
   const [name, setName] = useState('');
 
+  // Devices
+  const [devices, setDevices] = useState<Device[]>([]);
+
   // Blacklist state
   const [blacklist, setBlacklist] = useState<BlacklistEntry[]>([]);
   const [loadingBl, setLoadingBl] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [newPhone, setNewPhone] = useState('');
   const [newLabel, setNewLabel] = useState('');
+  const [newDeviceId, setNewDeviceId] = useState('');
+  const [csvDeviceId, setCsvDeviceId] = useState('');
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -39,6 +61,9 @@ export default function SettingsPage() {
     supabase.from('profiles').select('*').eq('id', user.id).single().then(({ data }) => {
       setProfile(data);
       setName(data?.name || '');
+    });
+    supabase.from('devices').select('id, name, instance_name').eq('user_id', user.id).then(({ data }) => {
+      setDevices(data || []);
     });
   }, [user]);
 
@@ -63,20 +88,19 @@ export default function SettingsPage() {
     else toast.success('Perfil atualizado!');
   };
 
-  const normalizePhone = (raw: string) => raw.replace(/\D/g, '');
-
   const handleAddNumber = async () => {
-    if (!user || !newPhone.trim()) return;
+    if (!user || !newPhone.trim() || !newDeviceId) return;
     setSaving(true);
-    const phone = normalizePhone(newPhone);
+    const phone = canonicalPhone(newPhone);
     const { error } = await supabase.from('blacklist').insert({
       user_id: user.id,
       phone,
       label: newLabel.trim() || null,
+      device_id: newDeviceId,
     });
     setSaving(false);
     if (error) {
-      if (error.code === '23505') toast.error('Número já está na blacklist');
+      if (error.code === '23505') toast.error('Número já está na blacklist para este dispositivo');
       else toast.error(error.message);
       return;
     }
@@ -98,7 +122,10 @@ export default function SettingsPage() {
 
   const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file || !user || !csvDeviceId) {
+      if (!csvDeviceId) toast.error('Selecione um dispositivo antes de importar');
+      return;
+    }
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
@@ -106,11 +133,11 @@ export default function SettingsPage() {
         const rows = results.data as Record<string, string>[];
         const entries = rows
           .map((r) => {
-            const phone = normalizePhone(r.telefone || r.phone || r.numero || '');
+            const phone = canonicalPhone(r.telefone || r.phone || r.numero || '');
             const label = r.label || r.nome || r.name || null;
-            return phone ? { user_id: user.id, phone, label } : null;
+            return phone ? { user_id: user.id, phone, label, device_id: csvDeviceId } : null;
           })
-          .filter(Boolean) as { user_id: string; phone: string; label: string | null }[];
+          .filter(Boolean) as { user_id: string; phone: string; label: string | null; device_id: string }[];
 
         if (entries.length === 0) {
           toast.error('Nenhum número válido encontrado no CSV');
@@ -118,7 +145,7 @@ export default function SettingsPage() {
         }
 
         const { error } = await supabase.from('blacklist').upsert(entries, {
-          onConflict: 'user_id,phone',
+          onConflict: 'user_id,device_id,phone',
           ignoreDuplicates: true,
         });
 
@@ -130,6 +157,12 @@ export default function SettingsPage() {
       },
     });
     e.target.value = '';
+  };
+
+  const getDeviceName = (deviceId: string | null) => {
+    if (!deviceId) return '—';
+    const d = devices.find((dev) => dev.id === deviceId);
+    return d ? d.name : deviceId.slice(0, 8);
   };
 
   return (
@@ -181,7 +214,20 @@ export default function SettingsPage() {
                     Estes números nunca serão contactados pela IA nem receberão disparos.
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-end">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Dispositivo (CSV)</Label>
+                    <Select value={csvDeviceId} onValueChange={setCsvDeviceId}>
+                      <SelectTrigger className="w-[160px] h-8 text-xs">
+                        <SelectValue placeholder="Selecionar..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {devices.map((d) => (
+                          <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <input
                     type="file"
                     accept=".csv"
@@ -189,7 +235,10 @@ export default function SettingsPage() {
                     onChange={handleCsvImport}
                     className="hidden"
                   />
-                  <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+                  <Button variant="outline" size="sm" onClick={() => {
+                    if (!csvDeviceId) { toast.error('Selecione um dispositivo antes de importar'); return; }
+                    fileRef.current?.click();
+                  }}>
                     <Upload className="h-4 w-4 mr-1" /> Importar CSV
                   </Button>
                   <Dialog open={addOpen} onOpenChange={setAddOpen}>
@@ -201,6 +250,19 @@ export default function SettingsPage() {
                         <DialogTitle>Adicionar número à blacklist</DialogTitle>
                       </DialogHeader>
                       <div className="space-y-4 pt-2">
+                        <div className="space-y-2">
+                          <Label>Dispositivo *</Label>
+                          <Select value={newDeviceId} onValueChange={setNewDeviceId}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione o dispositivo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {devices.map((d) => (
+                                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                         <div className="space-y-2">
                           <Label>Número *</Label>
                           <Input
@@ -219,7 +281,7 @@ export default function SettingsPage() {
                         </div>
                         <Button
                           onClick={handleAddNumber}
-                          disabled={!newPhone.trim() || saving}
+                          disabled={!newPhone.trim() || !newDeviceId || saving}
                           className="w-full"
                         >
                           {saving ? 'Salvando...' : 'Salvar'}
@@ -240,6 +302,7 @@ export default function SettingsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Número</TableHead>
+                      <TableHead>Dispositivo</TableHead>
                       <TableHead>Identificação</TableHead>
                       <TableHead>Data</TableHead>
                       <TableHead className="w-12"></TableHead>
@@ -249,6 +312,7 @@ export default function SettingsPage() {
                     {blacklist.map((entry) => (
                       <TableRow key={entry.id}>
                         <TableCell className="font-mono">{entry.phone}</TableCell>
+                        <TableCell>{getDeviceName(entry.device_id)}</TableCell>
                         <TableCell>{entry.label || '—'}</TableCell>
                         <TableCell className="text-muted-foreground">
                           {new Date(entry.created_at).toLocaleDateString('pt-BR')}
