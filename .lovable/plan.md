@@ -1,21 +1,52 @@
 
 
-# Adicionar campo obrigatório de API Key para Evolution API no formulário de aquecimento
+# Sistema de Blacklist de Números
 
-## Mudança
+## 1. Migration SQL
+Criar tabela `blacklist` com `user_id`, `phone`, `label`, constraint unique `(user_id, phone)`, RLS scoped por `auth.uid()`.
 
-### `src/pages/ChipWarmupPage.tsx`
+## 2. Edge Functions
 
-1. Mostrar campo "API Key" quando provider for `evolution` (além de já mostrar para `waha`)
-2. Tornar o campo obrigatório para `evolution` e `waha` — desabilitar botão "Conectar" se vazio
-3. No botão de "Reconectar" de cards inativos, também preencher o token
+### `evolution-webhook/index.ts`
+Após encontrar o `agent` (linha ~93), antes do lookup de conversas:
+- Normalizar `remoteJid` (só dígitos)
+- Consultar `blacklist` com `user_id = agent.user_id` e match no phone normalizado
+- Se encontrado, retornar 200 e ignorar completamente
 
-**Lógica atualizada:**
-- `showTokenField` muda de `provider === 'waha'` para `provider === 'evolution' || provider === 'waha'`
-- Label dinâmico: "API Key" para Evolution, "Token" para WAHA
-- Validação do botão: `disabled={!apiUrl || !token || connectMutation.isPending}` quando token é obrigatório
+### `blast-processor/index.ts`
+Dentro do loop de contatos (linha ~130), após skip de duplicatas e antes do claim:
+- Normalizar `contact.phone`
+- Consultar `blacklist` com `user_id = campaign.user_id`
+- Se encontrado, marcar contato como `error` com mensagem "Número na blacklist" e `continue`
+
+## 3. UI — Nova aba "Blacklist" em Settings
+
+### `src/pages/SettingsPage.tsx`
+Adicionar terceira aba "Blacklist" com:
+
+**Listagem:**
+- Tabela: Número | Label | Data | Ação (botão remover)
+- Estado vazio: "Nenhum número bloqueado ainda"
+- Carrega via `supabase.from('blacklist').select('*').eq('user_id', user.id)`
+
+**Adicionar número:**
+- Dialog com campos Número (obrigatório) e Label (opcional)
+- Ao salvar: normalizar phone (só dígitos), inserir com `user_id`
+
+**Importar CSV:**
+- Botão "Importar CSV" usando Papa Parse
+- Detecta coluna `telefone`/`phone`, opcionalmente `label`
+- Insere em batch, toast com contagem
+
+**Remover:**
+- Botão de delete por ID, com confirmação
+
+## Arquivos impactados
 
 | Arquivo | Mudança |
 |---|---|
-| `src/pages/ChipWarmupPage.tsx` | Exibir e tornar obrigatório campo API Key/Token para Evolution e WAHA |
+| Migration SQL | Criar tabela `blacklist` com RLS |
+| `supabase/functions/evolution-webhook/index.ts` | Checar blacklist antes de processar mensagem |
+| `supabase/functions/blast-processor/index.ts` | Pular contatos na blacklist durante disparo |
+| `src/pages/SettingsPage.tsx` | Nova aba Blacklist com CRUD + import CSV |
 
