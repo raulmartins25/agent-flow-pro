@@ -223,10 +223,19 @@ serve(async (req) => {
 
     let systemPrompt = agent.prompt_compiled;
 
-    const contactName = contact_name || "Contato";
-    systemPrompt += `\n\nINFORMAÇÃO DO CONTATO:
-O nome do contato é: ${contactName} (obtido automaticamente do WhatsApp).
-Use este nome para personalizar as mensagens de forma natural, mas NÃO pergunte o nome do lead.`;
+    // Clean contact name: reject JIDs and pure-numeric strings
+    const rawContactName = contact_name || null;
+    const cleanContactName = rawContactName && 
+      !rawContactName.includes('@') && 
+      !/^\d{8,}$/.test(rawContactName.trim())
+        ? rawContactName.trim()
+        : null;
+
+    const nameInstruction = cleanContactName
+      ? `\n\nINFORMAÇÃO DO CONTATO:\nO nome do contato é "${cleanContactName}" (obtido automaticamente do WhatsApp). Use-o para personalizar, mas NÃO peça o nome — você já o tem.`
+      : `\n\nINFORMAÇÃO DO CONTATO:\nO nome do contato não está disponível. NÃO faça perguntas para descobrir o nome — não é necessário para a qualificação.`;
+
+    systemPrompt += nameInstruction;
 
     if (agentFull?.type === "prospecting") {
       const userMessages = history.filter((m: any) => m.role === "user");
@@ -352,7 +361,7 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       let summary: string;
       if (template) {
         summary = template
-          .replace(/\{\{nome_contato\}\}/g, contactName)
+          .replace(/\{\{nome_contato\}\}/g, cleanContactName || 'Não informado')
           .replace(/\{\{telefone\}\}/g, contact_number)
           .replace(/\{\{data\}\}/g, new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }))
           .replace(/\{\{agente\}\}/g, agentFull.name || "");
@@ -368,7 +377,7 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
         summary = summary.replace(/\{\{perguntas_respostas\}\}/g, perguntasRespostas.trim());
       } else {
         summary = `*Novo lead qualificado* ✅\n\n`;
-        summary += `*Nome:* ${contactName}\n`;
+        summary += `*Nome:* ${cleanContactName || 'Não informado'}\n`;
         summary += `*Telefone:* ${contact_number}\n`;
         summary += `*Data:* ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}\n`;
         summary += `*Agente:* ${agentFull.name}\n\n`;
