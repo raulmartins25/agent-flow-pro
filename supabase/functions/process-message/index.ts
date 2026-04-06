@@ -297,7 +297,8 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
     }
 
     let shouldTransfer = aiResponse.includes("TRANSFER_LEAD");
-    let cleanResponse = aiResponse.replace(/TRANSFER_LEAD/g, "").trim();
+    const shouldEndConversation = aiResponse.includes("END_CONVERSATION");
+    let cleanResponse = aiResponse.replace(/TRANSFER_LEAD/g, "").replace(/END_CONVERSATION/g, "").trim();
 
     // --- Programmatic transfer detection ---
     const questions = (config?.qualification_questions as any[]) || [];
@@ -442,6 +443,15 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       } catch (transferErr) {
         console.error("Error sending transfer summary:", transferErr);
       }
+    }
+
+    // --- END_CONVERSATION detection ---
+    if (shouldEndConversation && !shouldTransfer) {
+      console.log("END_CONVERSATION detected — closing conversation");
+      await supabase
+        .from("conversations")
+        .update({ status: "closed" })
+        .eq("id", conversation_id);
     }
 
     const mediaRegex = /SEND_MEDIA:([a-f0-9-]+)/gi;
