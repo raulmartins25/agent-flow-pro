@@ -94,11 +94,18 @@ serve(async (req) => {
       });
     }
 
-    // Track phones already sent in this batch to avoid duplicates
-    const sentPhones = new Set<string>();
+    // Get phones already sent in this campaign (cross-batch dedup)
+    const { data: alreadySent } = await supabase
+      .from("blast_contacts")
+      .select("phone")
+      .eq("campaign_id", campaign_id)
+      .eq("status", "sent");
+    const sentPhones = new Set<string>(
+      (alreadySent || []).map((c: any) => canonicalPhone(c.phone))
+    );
 
     for (const contact of contacts) {
-      // Skip duplicate phones within this batch
+      // Skip duplicate phones
       const normalizedCheck = canonicalPhone(contact.phone);
       if (sentPhones.has(normalizedCheck)) {
         await supabase
@@ -106,7 +113,7 @@ serve(async (req) => {
           .update({ status: "sent", sent_at: new Date().toISOString() })
           .eq("id", contact.id);
         sentCount++;
-        console.log("Skipped duplicate phone in batch:", normalizedCheck);
+        console.log("Skipped duplicate phone:", normalizedCheck);
         continue;
       }
       sentPhones.add(normalizedCheck);
