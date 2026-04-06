@@ -54,6 +54,27 @@ serve(async (req) => {
 
       if (lastMsg.role !== "assistant") continue;
 
+      // Safety check: if last user message shows disinterest, close conversation
+      const { data: lastUserMsgs } = await supabase
+        .from("messages")
+        .select("content")
+        .eq("conversation_id", conv.id)
+        .eq("role", "user")
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      const userText = (lastUserMsgs?.[0]?.content || "").toLowerCase();
+      const disinterestWords = [
+        "não tenho interesse", "sem interesse", "não preciso",
+        "não quero", "não me interessa", "obrigado mas não",
+        "obrigada mas não", "para", "stop", "spam",
+        "não quero receber", "não preciso disso"
+      ];
+      if (disinterestWords.some(w => userText.includes(w))) {
+        await supabase.from("conversations").update({ status: "closed" }).eq("id", conv.id);
+        continue;
+      }
+
       const lastTime = new Date(lastMsg.created_at).getTime();
       const now = Date.now();
       const elapsed = (now - lastTime) / (1000 * 60);
