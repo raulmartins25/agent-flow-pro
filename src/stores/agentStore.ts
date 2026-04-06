@@ -15,6 +15,7 @@ interface AgentWizardData {
   // Step 3
   welcome_message: string;
   first_prospecting_message: string;
+  prospecting_messages: string[];
   // Step 4
   qualification_questions: Array<{
     id: string;
