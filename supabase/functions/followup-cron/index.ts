@@ -33,14 +33,35 @@ serve(async (req) => {
       const agent = conv.agents as any;
       if (!agent || agent.status !== "active") continue;
 
+      const device = agent.devices;
+      if (!device || device.status !== "connected") continue;
+
+      // --- BLACKLIST CHECK ---
+      const convCanonical = canonicalPhone(conv.contact_number);
+      const { data: blRows } = await supabase
+        .from("blacklist")
+        .select("id, phone")
+        .eq("user_id", agent.user_id)
+        .eq("device_id", device.id);
+
+      const isBlacklisted = (blRows || []).some(
+        (b: any) => canonicalPhone(b.phone) === convCanonical
+      );
+
+      if (isBlacklisted) {
+        console.log(`Conversa ${conv.id} — número ${convCanonical} está na blacklist, encerrando`);
+        await supabase
+          .from("conversations")
+          .update({ status: "closed", agent_paused: true, is_waiting_reply: false })
+          .eq("id", conv.id);
+        continue;
+      }
+
       // Prospecting agents: only followup if lead already replied (is_waiting_reply === false)
       if (agent.type === "prospecting" && conv.is_waiting_reply === true) {
         console.log(`Conversa ${conv.id} ignorada — lead nunca respondeu ao disparo`);
         continue;
       }
-
-      const device = agent.devices;
-      if (!device || device.status !== "connected") continue;
 
       const followupMax = agent.followup_max || 3;
       const followupInterval = agent.followup_interval_minutes || 120;

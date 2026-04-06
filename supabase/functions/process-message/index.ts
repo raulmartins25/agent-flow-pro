@@ -116,6 +116,35 @@ serve(async (req) => {
     const evoKey = device.evolution_api_key;
     const evoInstance = device.instance_name;
 
+    // --- BLACKLIST CHECK ---
+    const contactCanonical = contact_number.replace(/@.*$/, "").replace(/\D/g, "");
+    const contactCanonical13 = contactCanonical.startsWith("55") && contactCanonical.length === 12
+      ? contactCanonical.slice(0, 4) + "9" + contactCanonical.slice(4)
+      : contactCanonical;
+
+    const { data: blRows } = await supabase
+      .from("blacklist")
+      .select("id, phone")
+      .eq("user_id", agentFull?.user_id || agent.user_id)
+      .eq("device_id", device.id);
+
+    const isBlacklisted = (blRows || []).some((b: any) => {
+      let bp = (b.phone || "").replace(/\D/g, "");
+      if (bp.startsWith("55") && bp.length === 12) bp = bp.slice(0, 4) + "9" + bp.slice(4);
+      return bp === contactCanonical13;
+    });
+
+    if (isBlacklisted) {
+      console.log(`Número ${contactCanonical13} está na blacklist — bloqueando process-message`);
+      await supabase
+        .from("conversations")
+        .update({ status: "closed", agent_paused: true, is_waiting_reply: false })
+        .eq("id", conversation_id);
+      return new Response(JSON.stringify({ ok: true, blocked: true, reason: "blacklisted" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // --- Early return for already-transferred conversations ---
     const { data: convCheck } = await supabase
       .from("conversations")
