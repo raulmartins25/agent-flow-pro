@@ -35,6 +35,8 @@ type Message = {
 
 type Device = { id: string; name: string };
 
+const displayPhone = (raw: string) => raw?.replace(/@s\.whatsapp\.net$/i, '') || '';
+
 export default function InboxPage() {
   const { conversationId } = useParams();
   const user = useAuthStore((s) => s.user);
