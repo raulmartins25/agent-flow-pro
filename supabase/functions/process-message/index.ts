@@ -220,9 +220,41 @@ serve(async (req) => {
     }
 
     const lastUserMsg = [...history].reverse().find((m: any) => m.role === "user");
+    const msgLower = (lastUserMsg?.content || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+    // --- DISINTEREST DETECTION (deterministic, before LLM) ---
+    const disinterestPhrases = [
+      "nao obrigado", "nao obrigada", "nao tenho interesse", "sem interesse",
+      "nao quero", "nao me interessa", "obrigado mas nao", "obrigada mas nao",
+      "nao preciso", "nao quero receber", "nao precisa", "sem interesse aqui",
+      "nao desejo", "nao necessito", "dispenso", "nao e do meu interesse",
+    ];
+    const isDisinterest = disinterestPhrases.some(phrase => msgLower.includes(phrase));
+
+    if (isDisinterest) {
+      console.log(`Desinteresse detectado na conversa ${conversation_id}: "${lastUserMsg?.content}"`);
+      const goodbyeMsg = "Entendido! Não enviaremos mais mensagens. Se precisar de algo no futuro, é só chamar. 👋";
+
+      await supabase.from("conversations")
+        .update({ status: "closed", agent_paused: true, is_waiting_reply: false })
+        .eq("id", conversation_id);
+
+      await supabase.from("messages").insert({ conversation_id, role: "assistant", content: goodbyeMsg });
+
+      await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: evoKey || "" },
+        body: JSON.stringify({ number: contact_number, text: goodbyeMsg }),
+      });
+
+      return new Response(JSON.stringify({ ok: true, action: "closed_disinterest" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // --- BAN TRIGGERS (aggressive opt-out) ---
     if (lastUserMsg?.content && agentFull?.restrictions) {
-      const banTriggers = ["para", "stop", "me tira", "não quero", "denuncia", "spam", "me bloqueia"];
-      const msgLower = lastUserMsg.content.toLowerCase().trim();
+      const banTriggers = ["para", "stop", "me tira", "denuncia", "spam", "me bloqueia"];
       const isBanTrigger = banTriggers.some(trigger => msgLower === trigger || msgLower.startsWith(trigger + " "));
 
       if (isBanTrigger) {

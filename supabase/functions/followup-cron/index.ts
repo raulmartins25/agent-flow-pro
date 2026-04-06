@@ -99,15 +99,19 @@ serve(async (req) => {
         .order("created_at", { ascending: false })
         .limit(1);
 
-      const userText = (lastUserMsgs?.[0]?.content || "").toLowerCase();
-      const disinterestWords = [
-        "não tenho interesse", "sem interesse", "não preciso",
-        "não quero", "não me interessa", "obrigado mas não",
-        "obrigada mas não", "para", "stop", "spam",
-        "não quero receber", "não preciso disso"
+      const userText = (lastUserMsgs?.[0]?.content || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      const disinterestPhrases = [
+        "nao obrigado", "nao obrigada", "nao tenho interesse", "sem interesse",
+        "nao quero", "nao me interessa", "obrigado mas nao", "obrigada mas nao",
+        "nao preciso", "nao quero receber", "nao precisa", "sem interesse aqui",
+        "nao desejo", "nao necessito", "dispenso", "nao e do meu interesse",
+        "para", "stop", "spam",
       ];
-      if (disinterestWords.some(w => userText.includes(w))) {
-        await supabase.from("conversations").update({ status: "closed" }).eq("id", conv.id);
+      if (disinterestPhrases.some(w => userText.includes(w))) {
+        console.log(`Conversa ${conv.id} — desinteresse detectado: "${lastUserMsgs?.[0]?.content}"`);
+        await supabase.from("conversations")
+          .update({ status: "closed", agent_paused: true, is_waiting_reply: false })
+          .eq("id", conv.id);
         continue;
       }
 
