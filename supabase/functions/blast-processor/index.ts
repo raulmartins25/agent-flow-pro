@@ -232,7 +232,7 @@ serve(async (req) => {
               apikey: device.evolution_api_key || "",
             },
             body: JSON.stringify({
-              number: contact.phone,
+              number: contact.phone.replace(/@.*$/, ""),
               text: message,
             }),
           }
