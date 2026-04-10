@@ -66,7 +66,8 @@ serve(async (req) => {
       });
     }
 
-    const baseUrl = device.evolution_api_url.replace(/\/+$/, "");
+    let baseUrl = device.evolution_api_url.replace(/\/+$/, "");
+    if (!/^https?:\/\//i.test(baseUrl)) baseUrl = `https://${baseUrl}`;
     const res = await fetch(
       `${baseUrl}/instance/connectionState/${device.instance_name}`,
       { headers: { apikey: device.evolution_api_key } }

@@ -35,8 +35,10 @@ serve(async (req) => {
     }
 
     // Logout from Evolution API
+    let rawUrl = device.evolution_api_url.replace(/\/+$/, "");
+    if (!/^https?:\/\//i.test(rawUrl)) rawUrl = `https://${rawUrl}`;
     await fetch(
-      `${device.evolution_api_url}/instance/logout/${device.instance_name}`,
+      `${rawUrl}/instance/logout/${device.instance_name}`,
       { method: "DELETE", headers: { apikey: device.evolution_api_key } }
     );
 

@@ -42,7 +42,16 @@ serve(async (req) => {
     }
 
     const agent = campaign.agents;
-    const device = agent.devices;
+    const rawDevice = agent.devices;
+    // Normalize evolution_api_url to include protocol
+    const device = rawDevice ? {
+      ...rawDevice,
+      evolution_api_url: (() => {
+        let url = rawDevice.evolution_api_url.replace(/\/+$/, "");
+        if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+        return url;
+      })(),
+    } : rawDevice;
 
     if (!device || device.status !== "connected") {
       await supabase.from("blast_campaigns").update({ status: "error" }).eq("id", campaign_id);

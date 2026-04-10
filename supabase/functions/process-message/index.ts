@@ -112,7 +112,8 @@ serve(async (req) => {
       });
     }
 
-    const evoUrl = device.evolution_api_url;
+    let evoUrl = device.evolution_api_url.replace(/\/+$/, "");
+    if (!/^https?:\/\//i.test(evoUrl)) evoUrl = `https://${evoUrl}`;
     const evoKey = device.evolution_api_key;
     const evoInstance = device.instance_name;
 

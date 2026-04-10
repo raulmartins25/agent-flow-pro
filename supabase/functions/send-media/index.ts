@@ -53,8 +53,10 @@ serve(async (req) => {
 
     if (caption) body.caption = caption;
 
+    let evoUrl = device.evolution_api_url.replace(/\/+$/, "");
+    if (!/^https?:\/\//i.test(evoUrl)) evoUrl = `https://${evoUrl}`;
     const res = await fetch(
-      `${device.evolution_api_url}/message/${endpoint}/${device.instance_name}`,
+      `${evoUrl}/message/${endpoint}/${device.instance_name}`,
       {
         method: "POST",
         headers: {
