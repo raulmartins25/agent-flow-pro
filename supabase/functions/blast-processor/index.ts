@@ -241,6 +241,27 @@ serve(async (req) => {
         if (res.ok) {
           const normalizedPhone = canonicalPhone(contact.phone);
 
+          // --- CHECK for transferred conversation — skip if already transferred ---
+          const { data: transferredConvs } = await supabase
+            .from("conversations")
+            .select("id")
+            .eq("agent_id", agent.id)
+            .eq("device_id", device.id)
+            .eq("contact_number", normalizedPhone)
+            .eq("status", "transferred")
+            .limit(1);
+
+          if (transferredConvs && transferredConvs.length > 0) {
+            console.log("Skipping already-transferred contact:", normalizedPhone, "conv:", transferredConvs[0].id);
+            await supabase.from("blast_contacts").update({
+              status: "sent",
+              sent_at: new Date().toISOString(),
+              error_message: "Contato já transferido — ignorado",
+            }).eq("id", contact.id);
+            sentCount++;
+            continue;
+          }
+
           // --- REUSE existing conversation for same agent+device+phone ---
           const { data: existingConvs } = await supabase
             .from("conversations")

@@ -122,15 +122,14 @@ serve(async (req) => {
       }
 
       // --- RANKED conversation lookup ---
-      // Only look for OPEN conversations (is_waiting_reply, active, paused)
-      // Do NOT reuse transferred or closed conversations
+      // Look for open OR transferred conversations to avoid creating duplicates
       const { data: openConvs } = await supabase
         .from("conversations")
         .select("*")
         .eq("agent_id", agent.id)
         .eq("device_id", device.id)
         .eq("contact_number", remoteJid)
-        .in("status", ["active", "paused"])
+        .in("status", ["active", "paused", "transferred"])
         .order("created_at", { ascending: false });
 
       const { data: waitingConvs } = await supabase
