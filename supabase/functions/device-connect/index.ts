@@ -66,7 +66,9 @@ serve(async (req) => {
       });
     }
 
-    const baseUrl = device.evolution_api_url.replace(/\/+$/, "");
+    let rawUrl = device.evolution_api_url.replace(/\/+$/, "");
+    if (!/^https?:\/\//i.test(rawUrl)) rawUrl = `https://${rawUrl}`;
+    const baseUrl = rawUrl;
     const apiKey = device.evolution_api_key;
     const instanceName = device.instance_name;
 
