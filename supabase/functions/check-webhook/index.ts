@@ -34,8 +34,11 @@ serve(async (req) => {
       });
     }
 
+    let rawUrl = device.evolution_api_url.replace(/\/+$/, "");
+    if (!/^https?:\/\//i.test(rawUrl)) rawUrl = `https://${rawUrl}`;
+
     const res = await fetch(
-      `${device.evolution_api_url}/webhook/find/${device.instance_name}`,
+      `${rawUrl}/webhook/find/${device.instance_name}`,
       { headers: { apikey: device.evolution_api_key } }
     );
 
