@@ -6,13 +6,34 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/** Strip JID suffix and non-digits → pure phone digits */
+function normalizeContactNumber(jid: string): string {
+  return jid.replace(/@.*$/, "").replace(/\D/g, "");
+}
+
 /** Normalize BR phone to canonical 13-digit format: 55 + 2-digit DDD + 9 + 8 digits */
 function canonicalPhone(raw: string): string {
-  let digits = raw.replace(/@.*$/, "").replace(/\D/g, "");
+  let digits = normalizeContactNumber(raw);
   if (digits.startsWith("55") && digits.length === 12) {
     digits = digits.slice(0, 4) + "9" + digits.slice(4);
   }
   return digits;
+}
+
+/** Insert message with idempotency — returns true if duplicate */
+async function insertMessageIdempotent(
+  supabase: any,
+  params: { conversation_id: string; role: string; content: string; evolution_message_id?: string; media_url?: string | null; media_type?: string | null }
+): Promise<boolean> {
+  const { error } = await supabase.from("messages").insert(params);
+  if (error) {
+    if (error.code === "23505") {
+      console.log("Duplicate message detected (23505), skipping:", params.evolution_message_id);
+      return true;
+    }
+    console.error("Error inserting message:", error);
+  }
+  return false;
 }
 
 serve(async (req) => {
@@ -32,243 +53,207 @@ serve(async (req) => {
     console.log("Event:", event, "Instance:", instanceName || "unknown");
     console.log("Body:", JSON.stringify(body).substring(0, 500));
 
+    if (event !== "messages.upsert") {
+      return new Response(JSON.stringify({ ok: true, event }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    if (event === "messages.upsert") {
-      const msg = data;
-      const rawJid = (msg.key?.remoteJid || "");
-      const remoteJid = canonicalPhone(rawJid);
-      const fromMe = msg.key?.fromMe || false;
+    const msg = data;
+    const rawJid = msg.key?.remoteJid || "";
+    const fromMe = msg.key?.fromMe || false;
+    const evolutionMessageId = msg.key?.id || null;
 
-      const content = msg.message?.conversation ||
-        msg.message?.extendedTextMessage?.text ||
-        msg.message?.imageMessage?.caption || "";
+    // === 1. GROUP FILTER ===
+    if (rawJid.endsWith("@g.us")) {
+      console.log("Group message ignored:", rawJid);
+      return new Response(JSON.stringify({ ok: true, message: "Group message ignored" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-      console.log("Remote:", remoteJid, "(raw:", rawJid, ") FromMe:", fromMe, "Content:", content?.substring(0, 100));
+    // === 2. FROM_ME FILTER (prevent loop) ===
+    if (fromMe) {
+      console.log("Own message ignored (fromMe=true), msgId:", evolutionMessageId);
+      return new Response(JSON.stringify({ ok: true, message: "Own message ignored" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-      if (fromMe) {
-        console.log("Ignorando mensagem própria (fromMe=true)");
-      }
+    // === 3. NORMALIZE ===
+    const contactNumber = normalizeContactNumber(rawJid);
+    const content = msg.message?.conversation ||
+      msg.message?.extendedTextMessage?.text ||
+      msg.message?.imageMessage?.caption || "";
 
-      if (!instanceName) {
-        console.log("instanceName vazio, ignorando");
-        return new Response(JSON.stringify({ ok: true, message: "No instance name" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+    console.log("Contact:", contactNumber, "(raw:", rawJid, ") Content:", content?.substring(0, 100));
 
-      // Find device
-      const { data: device, error: deviceErr } = await supabase
-        .from("devices")
-        .select("*")
-        .eq("instance_name", instanceName)
-        .eq("status", "connected")
-        .single();
+    if (!instanceName) {
+      console.log("instanceName empty, ignoring");
+      return new Response(JSON.stringify({ ok: true, message: "No instance name" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-      console.log("Device lookup:", device ? `Found ${device.id} (${device.name})` : `Not found (${deviceErr?.message})`);
+    // === 4. DEVICE/AGENT LOOKUP ===
+    const { data: device } = await supabase
+      .from("devices")
+      .select("*")
+      .eq("instance_name", instanceName)
+      .eq("status", "connected")
+      .single();
 
-      if (!device) {
-        return new Response(JSON.stringify({ ok: true, message: "No device found" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+    if (!device) {
+      console.log("No connected device for instance:", instanceName);
+      return new Response(JSON.stringify({ ok: true, message: "No device found" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-      // Find active agent
-      const { data: agent, error: agentErr } = await supabase
-        .from("agents")
-        .select("id, user_id, status, type, prompt_compiled, llm_provider, llm_model, llm_api_key, device_id")
-        .eq("device_id", device.id)
-        .eq("status", "active")
-        .single();
+    const { data: agent } = await supabase
+      .from("agents")
+      .select("id, user_id, status, type, prompt_compiled, llm_provider, llm_model, llm_api_key, device_id")
+      .eq("device_id", device.id)
+      .eq("status", "active")
+      .single();
 
-      console.log("Agent lookup:", agent ? `Found ${agent.id}` : `Not found (${agentErr?.message})`);
+    if (!agent) {
+      console.log("No active agent for device:", device.id);
+      return new Response(JSON.stringify({ ok: true, message: "No active agent" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-      if (!agent) {
-        return new Response(JSON.stringify({ ok: true, message: "No active agent for device" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+    // === 5. BLACKLIST (normalized comparison) ===
+    const canonicalRemote = canonicalPhone(rawJid);
+    const { data: blRows } = await supabase
+      .from("blacklist")
+      .select("id, phone")
+      .eq("user_id", agent.user_id)
+      .eq("device_id", device.id);
 
-      // --- BLACKLIST CHECK ---
-      const canonicalRemote = canonicalPhone(rawJid);
-      const { data: blRows } = await supabase
-        .from("blacklist")
-        .select("id, phone")
-        .eq("user_id", agent.user_id)
-        .eq("device_id", device.id);
+    const blacklisted = (blRows || []).some(
+      (b: any) => canonicalPhone(b.phone) === canonicalRemote
+    );
 
-      const blacklisted = (blRows || []).some(
-        (b: any) => canonicalPhone(b.phone) === canonicalRemote
-      );
-
-      if (blacklisted) {
-        console.log(`Número ${canonicalRemote} está na blacklist — ignorando`);
-
-        // Close any open conversations for this blacklisted number
-        await supabase
-          .from("conversations")
-          .update({ status: "closed", agent_paused: true, is_waiting_reply: false })
-          .eq("agent_id", agent.id)
-          .eq("device_id", device.id)
-          .eq("contact_number", remoteJid)
-          .in("status", ["active", "paused"]);
-
-        return new Response(JSON.stringify({ ok: true, message: "Blacklisted" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      // --- RANKED conversation lookup ---
-      // Look for open OR transferred conversations to avoid creating duplicates
-      const { data: openConvs } = await supabase
+    if (blacklisted) {
+      console.log(`Number ${canonicalRemote} is blacklisted — ignoring`);
+      await supabase
         .from("conversations")
-        .select("*")
+        .update({ status: "closed", agent_paused: true, is_waiting_reply: false })
         .eq("agent_id", agent.id)
         .eq("device_id", device.id)
-        .eq("contact_number", remoteJid)
-        .in("status", ["active", "paused", "transferred"])
-        .order("created_at", { ascending: false });
+        .eq("contact_number", contactNumber)
+        .in("status", ["active", "paused"]);
+      return new Response(JSON.stringify({ ok: true, message: "Blacklisted" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-      const { data: waitingConvs } = await supabase
-        .from("conversations")
-        .select("*")
-        .eq("agent_id", agent.id)
-        .eq("device_id", device.id)
-        .eq("contact_number", remoteJid)
-        .eq("is_waiting_reply", true)
-        .order("created_at", { ascending: false })
-        .limit(1);
+    // === 6. CONVERSATION LOOKUP (normalized) ===
+    const contactName = msg.pushName || rawJid.split("@")[0] || "Contato";
 
-      let conversation = null;
-      const contactName = msg.pushName || rawJid.split("@")[0] || "Contato";
+    // Determine media
+    let mediaUrl = null;
+    let mediaType = null;
+    if (msg.message?.imageMessage) { mediaType = "image"; }
+    else if (msg.message?.audioMessage) { mediaType = "audio"; }
+    else if (msg.message?.documentMessage) { mediaType = "document"; }
+    else if (msg.message?.videoMessage) { mediaType = "video"; }
 
-      // Priority: is_waiting_reply first, then active/paused
-      const waitingConv = waitingConvs?.[0] || null;
-      const activeConv = openConvs?.[0] || null;
-      conversation = waitingConv || activeConv;
+    // Look for existing conversations (any non-closed status)
+    const { data: existingConvs } = await supabase
+      .from("conversations")
+      .select("*")
+      .eq("agent_id", agent.id)
+      .eq("device_id", device.id)
+      .eq("contact_number", contactNumber)
+      .in("status", ["active", "paused", "transferred"])
+      .order("created_at", { ascending: false })
+      .limit(1);
 
-      if (conversation) {
-        // Update contact_name if needed
-        const updates: any = {};
-        if (msg.pushName && (!conversation.contact_name || conversation.contact_name === conversation.contact_number)) {
-          updates.contact_name = contactName;
-          conversation.contact_name = contactName;
-        }
-        if (Object.keys(updates).length > 0) {
-          await supabase.from("conversations").update(updates).eq("id", conversation.id);
-        }
-        console.log("Using existing conversation:", conversation.id, "status:", conversation.status);
-      }
+    // Also check waiting_reply (blast prospecting)
+    const { data: waitingConvs } = await supabase
+      .from("conversations")
+      .select("*")
+      .eq("agent_id", agent.id)
+      .eq("device_id", device.id)
+      .eq("contact_number", contactNumber)
+      .eq("is_waiting_reply", true)
+      .order("created_at", { ascending: false })
+      .limit(1);
 
-      // If no open conversation found, create a brand new one
-      if (!conversation) {
-        const { data: newConv } = await supabase
-          .from("conversations")
-          .insert({
-            agent_id: agent.id,
-            device_id: device.id,
-            instance_name: instanceName,
-            contact_number: remoteJid,
-            contact_name: contactName,
-            status: "active",
-          })
-          .select()
-          .single();
-        conversation = newConv;
-        console.log("Created NEW conversation (no open ones found):", newConv?.id);
-      }
+    const waitingConv = waitingConvs?.[0] || null;
+    const activeConv = existingConvs?.[0] || null;
+    let conversation = waitingConv || activeConv;
 
-      if (!conversation) {
-        return new Response(JSON.stringify({ error: "Failed to create conversation" }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+    // Update contact_name if needed
+    if (conversation && msg.pushName && (!conversation.contact_name || conversation.contact_name === conversation.contact_number)) {
+      await supabase.from("conversations").update({ contact_name: contactName }).eq("id", conversation.id);
+      conversation.contact_name = contactName;
+    }
 
-      // Determine media
-      let mediaUrl = null;
-      let mediaType = null;
-      if (msg.message?.imageMessage) { mediaType = "image"; }
-      else if (msg.message?.audioMessage) { mediaType = "audio"; }
-      else if (msg.message?.documentMessage) { mediaType = "document"; }
-      else if (msg.message?.videoMessage) { mediaType = "video"; }
+    // === 7. EARLY RETURN for transferred/closed/paused ===
+    if (conversation && ["transferred", "closed", "paused"].includes(conversation.status)) {
+      console.log(`Conversation ${conversation.id} status=${conversation.status} — saving message, AI stopped. msgId:`, evolutionMessageId);
 
-      // --- PROSPECTING: Lead replied to blast ---
-      if (!fromMe && conversation.is_waiting_reply) {
-        console.log("Lead replied to blast, activating agent for conversation:", conversation.id);
-        await supabase
-          .from("conversations")
-          .update({ is_waiting_reply: false })
-          .eq("id", conversation.id);
-
-        await supabase.from("messages").insert({
-          conversation_id: conversation.id,
-          role: "user",
-          content,
-          media_url: mediaUrl,
-          media_type: mediaType,
-        });
-
-        await supabase
-          .from("conversations")
-          .update({ last_message_at: new Date().toISOString() })
-          .eq("id", conversation.id);
-
-        const { data: history } = await supabase
-          .from("messages")
-          .select("role, content")
-          .eq("conversation_id", conversation.id)
-          .not("content", "is", null)
-          .neq("content", "")
-          .order("created_at", { ascending: true })
-          .limit(50);
-
-        const processUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-message`;
-        await fetch(processUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-          },
-          body: JSON.stringify({
-            conversation_id: conversation.id,
-            agent,
-            history: history || [],
-            contact_number: remoteJid,
-            contact_name: conversation.contact_name || contactName,
-            instance_name: instanceName,
-            device_id: device.id,
-          }),
-        });
-
-        return new Response(JSON.stringify({ ok: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      // Save incoming message
-      const role = fromMe ? "assistant" : "user";
-      await supabase.from("messages").insert({
+      const isDuplicate = await insertMessageIdempotent(supabase, {
         conversation_id: conversation.id,
-        role,
+        role: "user",
         content,
+        evolution_message_id: evolutionMessageId,
         media_url: mediaUrl,
         media_type: mediaType,
       });
+
+      if (isDuplicate) {
+        return new Response(JSON.stringify({ ok: true, message: "Duplicate" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
       await supabase
         .from("conversations")
         .update({ last_message_at: new Date().toISOString() })
         .eq("id", conversation.id);
 
-      if (conversation.agent_paused || fromMe) {
-        console.log("Skipping process-message: paused=", conversation.agent_paused, "fromMe=", fromMe);
-        return new Response(JSON.stringify({ ok: true }), {
+      return new Response(JSON.stringify({ ok: true, skipped: true, reason: conversation.status }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // === 8. PROSPECTING: Lead replied to blast (is_waiting_reply) ===
+    if (conversation && conversation.is_waiting_reply) {
+      console.log("Lead replied to blast, activating agent for conversation:", conversation.id);
+      await supabase
+        .from("conversations")
+        .update({ is_waiting_reply: false })
+        .eq("id", conversation.id);
+
+      const isDuplicate = await insertMessageIdempotent(supabase, {
+        conversation_id: conversation.id,
+        role: "user",
+        content,
+        evolution_message_id: evolutionMessageId,
+        media_url: mediaUrl,
+        media_type: mediaType,
+      });
+
+      if (isDuplicate) {
+        return new Response(JSON.stringify({ ok: true, message: "Duplicate" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      await supabase
+        .from("conversations")
+        .update({ last_message_at: new Date().toISOString() })
+        .eq("id", conversation.id);
 
       const { data: history } = await supabase
         .from("messages")
@@ -290,13 +275,118 @@ serve(async (req) => {
           conversation_id: conversation.id,
           agent,
           history: history || [],
-          contact_number: remoteJid,
+          contact_number: contactNumber,
           contact_name: conversation.contact_name || contactName,
           instance_name: instanceName,
           device_id: device.id,
         }),
       });
+
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
+
+    // === 9. UPSERT conversation (atomic, ignoreDuplicates) ===
+    if (!conversation) {
+      const { data: upserted } = await supabase
+        .from("conversations")
+        .upsert(
+          {
+            agent_id: agent.id,
+            device_id: device.id,
+            instance_name: instanceName,
+            contact_number: contactNumber,
+            contact_name: contactName,
+            status: "active",
+          },
+          { onConflict: "agent_id,device_id,contact_number", ignoreDuplicates: true }
+        )
+        .select()
+        .single();
+
+      if (upserted) {
+        conversation = upserted;
+        console.log("Created/found conversation via upsert:", conversation.id);
+      } else {
+        // upsert returned nothing (ignoreDuplicates hit) — fetch existing
+        const { data: fetched } = await supabase
+          .from("conversations")
+          .select("*")
+          .eq("agent_id", agent.id)
+          .eq("device_id", device.id)
+          .eq("contact_number", contactNumber)
+          .in("status", ["active", "paused", "transferred"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+        conversation = fetched;
+        console.log("Fetched existing conversation after upsert:", conversation?.id);
+      }
+    }
+
+    if (!conversation) {
+      return new Response(JSON.stringify({ error: "Failed to create conversation" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // === 10. INSERT MESSAGE (idempotent) ===
+    const isDuplicate = await insertMessageIdempotent(supabase, {
+      conversation_id: conversation.id,
+      role: "user",
+      content,
+      evolution_message_id: evolutionMessageId,
+      media_url: mediaUrl,
+      media_type: mediaType,
+    });
+
+    if (isDuplicate) {
+      return new Response(JSON.stringify({ ok: true, message: "Duplicate" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    await supabase
+      .from("conversations")
+      .update({ last_message_at: new Date().toISOString() })
+      .eq("id", conversation.id);
+
+    // Check agent_paused
+    if (conversation.agent_paused) {
+      console.log("Agent paused for conversation:", conversation.id);
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // === 11. CALL PROCESS-MESSAGE ===
+    const { data: history } = await supabase
+      .from("messages")
+      .select("role, content")
+      .eq("conversation_id", conversation.id)
+      .not("content", "is", null)
+      .neq("content", "")
+      .order("created_at", { ascending: true })
+      .limit(50);
+
+    const processUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-message`;
+    await fetch(processUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+      },
+      body: JSON.stringify({
+        conversation_id: conversation.id,
+        agent,
+        history: history || [],
+        contact_number: contactNumber,
+        contact_name: conversation.contact_name || contactName,
+        instance_name: instanceName,
+        device_id: device.id,
+      }),
+    });
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
