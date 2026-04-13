@@ -67,9 +67,8 @@ export default function DevicesPage() {
           body: { device_id: manageDevice.id },
         });
         if (res.data?.status) {
-          const updated = { ...manageDevice, ...res.data };
-          setManageDevice(updated);
-          setDevices(prev => prev.map(d => d.id === updated.id ? updated : d));
+          setManageDevice(prev => prev ? { ...prev, ...res.data } : prev);
+          setDevices(prev => prev.map(d => d.id === manageDevice.id ? { ...d, ...res.data } : d));
           if (res.data.status === 'connected') {
             toast.success('Dispositivo conectado!');
           }
@@ -130,8 +129,7 @@ export default function DevicesPage() {
       });
       if (res.error) throw new Error(res.error.message);
       if (res.data) {
-        const updated = { ...manageDevice!, ...res.data };
-        setManageDevice(updated);
+        setManageDevice(prev => prev ? { ...prev, ...res.data } : prev);
         setDevices(prev => prev.map(d => d.id === deviceId ? { ...d, ...res.data } : d));
       }
     } catch (e: any) {
