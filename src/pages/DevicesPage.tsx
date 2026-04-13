@@ -130,8 +130,7 @@ export default function DevicesPage() {
       });
       if (res.error) throw new Error(res.error.message);
       if (res.data) {
-        const updated = { ...manageDevice!, ...res.data };
-        setManageDevice(updated);
+        setManageDevice(prev => prev ? { ...prev, ...res.data } : prev);
         setDevices(prev => prev.map(d => d.id === deviceId ? { ...d, ...res.data } : d));
       }
     } catch (e: any) {
