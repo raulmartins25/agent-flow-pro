@@ -1,55 +1,26 @@
 
 
-## Auditoria: Agente Eva — problemas encontrados
+## Correção: Coluna `evolution_message_id` ausente na tabela `messages`
 
-### Status atual da Eva no banco
-- `followup_max: 0` ✅ (toggle desativado corretamente)
-- `status: inactive` ✅ (não vai responder mensagens)
-- `type: prospecting`
+### Problema
+O webhook `evolution-webhook` tenta inserir mensagens com o campo `evolution_message_id` para garantir idempotência (evitar mensagens duplicadas). Porém, essa coluna **não existe** na tabela `messages`. O insert falha, a mensagem do usuário não é salva, mas o fluxo continua chamando `process-message`. A IA gera respostas sem o contexto das mensagens do lead, "conversando sozinha".
 
-### BUG CRÍTICO: followup_max = 0 não funciona
+### Correção (1 migration)
 
-**Linha 75 do `followup-cron/index.ts`:**
-```typescript
-const followupMax = agent.followup_max || 3;
+**Migration SQL:**
+```sql
+ALTER TABLE public.messages
+ADD COLUMN evolution_message_id text;
+
+CREATE UNIQUE INDEX idx_messages_evolution_id
+ON public.messages (evolution_message_id)
+WHERE evolution_message_id IS NOT NULL;
 ```
 
-JavaScript trata `0` como **falsy**. Quando `followup_max` é `0`, o `||` faz fallback para `3`. A Eva (e qualquer agente com followup desativado) **vai receber 3 followups mesmo assim**.
+Isso:
+1. Adiciona a coluna que o webhook já espera
+2. Cria um índice único parcial para que mensagens duplicadas (mesmo `evolution_message_id`) sejam rejeitadas com erro 23505, ativando a lógica de idempotência que já existe no código
 
-**Correção:** Trocar `||` por `??` (nullish coalescing) nas 3 linhas:
-```typescript
-const followupMax = agent.followup_max ?? 3;
-const followupInterval = agent.followup_interval_minutes ?? 120;
-const followupStart = agent.followup_start_message ?? 3;
-```
-
-### Blacklist — OK em todas as camadas
-
-| Camada | Status | Detalhes |
-|--------|--------|----------|
-| `evolution-webhook` | ✅ | Checa blacklist com `canonicalPhone`, fecha conversa se blacklisted |
-| `process-message` | ✅ | Guardrail de blacklist antes de chamar LLM |
-| `followup-cron` | ✅ | Checa blacklist, fecha conversa se blacklisted |
-| `blast-processor` | ✅ | Checa blacklist antes de enviar disparo |
-
-### Guardrails de status — OK
-
-| Camada | Status | Detalhes |
-|--------|--------|----------|
-| `evolution-webhook` | ✅ | Early return para `transferred`, `closed`, `paused` — salva mensagem com `evolution_message_id` (idempotente) |
-| `process-message` | ✅ | Guardrail para `transferred`, `closed`, `paused` antes do LLM |
-
-### Detecção de desinteresse — OK
-- `process-message`: checa frases de desinteresse antes do LLM, fecha conversa
-- `followup-cron`: checa desinteresse antes de enviar followup, fecha conversa
-
-### Resumo de ações
-
-Apenas **1 correção** necessária:
-
-**Arquivo:** `supabase/functions/followup-cron/index.ts` (linha 75-77)
-
-Trocar `||` por `??` nas 3 atribuições de followup para que `0` seja respeitado como valor válido em vez de cair no fallback.
-
-Sem essa correção, o toggle de desativar followup **não funciona** — é o único bug real. Todo o resto (blacklist, guardrails de status, idempotência) está correto.
+### Sem mudança de código
+O webhook já está correto — o problema é apenas a coluna ausente no banco.
 
