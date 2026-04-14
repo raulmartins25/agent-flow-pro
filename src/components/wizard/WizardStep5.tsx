@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Trash2, Shield } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 
 export function WizardStep5() {
   const { wizardData, updateWizardData } = useAgentStore();
@@ -56,10 +57,16 @@ export function WizardStep5() {
       {/* Followup */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Followup</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Followup</CardTitle>
+            <Switch
+              checked={wizardData.followup_enabled}
+              onCheckedChange={(checked) => updateWizardData({ followup_enabled: checked })}
+            />
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className={`grid grid-cols-3 gap-4 transition-opacity ${!wizardData.followup_enabled ? 'opacity-40 pointer-events-none' : ''}`}>
             <div className="space-y-2">
               <Label className="text-xs">Iniciar após mensagem nº</Label>
               <Input type="number" min={1} value={wizardData.followup_start_message} onChange={(e) => updateWizardData({ followup_start_message: Number(e.target.value) })} />

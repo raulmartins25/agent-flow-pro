@@ -63,8 +63,9 @@ export default function AgentWizard() {
           llm_api_key: agent.llm_api_key || '',
           transfer_number: agent.transfer_number || '',
           transfer_trigger: agent.transfer_trigger || 'after_all_questions',
+          followup_enabled: (agent.followup_max ?? 3) > 0,
           followup_start_message: agent.followup_start_message ?? 3,
-          followup_max: agent.followup_max ?? 3,
+          followup_max: (agent.followup_max ?? 3) > 0 ? (agent.followup_max ?? 3) : 3,
           followup_interval_minutes: agent.followup_interval_minutes ?? 120,
           ai_restrictions: config?.ai_restrictions || '',
           agent_persona_name: config?.agent_persona_name || '',
@@ -163,7 +164,7 @@ export default function AgentWizard() {
             transfer_number: wizardData.transfer_number || null,
             transfer_trigger: wizardData.transfer_trigger || null,
             followup_start_message: wizardData.followup_start_message,
-            followup_max: wizardData.followup_max,
+            followup_max: wizardData.followup_enabled ? wizardData.followup_max : 0,
             followup_interval_minutes: wizardData.followup_interval_minutes,
           })
           .eq('id', id!);
@@ -209,7 +210,7 @@ export default function AgentWizard() {
             transfer_number: wizardData.transfer_number || null,
             transfer_trigger: wizardData.transfer_trigger || null,
             followup_start_message: wizardData.followup_start_message,
-            followup_max: wizardData.followup_max,
+            followup_max: wizardData.followup_enabled ? wizardData.followup_max : 0,
             followup_interval_minutes: wizardData.followup_interval_minutes,
           })
           .select()

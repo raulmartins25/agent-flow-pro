@@ -30,6 +30,7 @@ interface AgentWizardData {
   }>;
   // Step 5
   objection_handlers: Array<{ objection: string; response: string }>;
+  followup_enabled: boolean;
   followup_start_message: number;
   followup_max: number;
   followup_interval_minutes: number;
@@ -72,6 +73,7 @@ const initialWizardData: AgentWizardData = {
     { objection: 'Já tenho fornecedor', response: 'Legal! Ter opções é sempre bom. Posso te mostrar nosso diferencial?' },
     { objection: 'Tá caro', response: 'Compreendo! Vamos ver como podemos adequar à sua realidade?' },
   ],
+  followup_enabled: true,
   followup_start_message: 3,
   followup_max: 3,
   followup_interval_minutes: 120,
