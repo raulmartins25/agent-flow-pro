@@ -1,59 +1,25 @@
 
 
-## Plano Final — Blindagem completa (pronto para execução)
+## Plano: Toggle para desativar followup nos agentes
 
-### 1. Migration SQL — coluna + índices
+### O que muda
 
-```sql
-ALTER TABLE messages ADD COLUMN IF NOT EXISTS evolution_message_id text;
-CREATE UNIQUE INDEX IF NOT EXISTS messages_evolution_id_unique 
-  ON messages (evolution_message_id) WHERE evolution_message_id IS NOT NULL;
+Adicionar um **Switch** no card de Followup (WizardStep5) que habilita/desabilita o followup. Quando desativado, `followup_max` será setado para `0` e os campos ficam desabilitados visualmente.
 
-CREATE UNIQUE INDEX IF NOT EXISTS conversations_agent_device_contact_active
-  ON conversations (agent_id, device_id, contact_number)
-  WHERE status IN ('active', 'paused', 'transferred');
-```
+### Implementação
 
-### 2. `evolution-webhook/index.ts` — Reescrita completa
+**1. `src/stores/agentStore.ts`** — Adicionar campo `followup_enabled: boolean` (default `true`) ao `AgentWizardData` e ao `initialWizardData`.
 
-Fluxo na ordem exata:
+**2. `src/components/wizard/WizardStep5.tsx`** — No card "Followup":
+- Adicionar `Switch` no header do card ao lado do título
+- Quando `followup_enabled = false`, desabilitar os 3 inputs (start, max, intervalo) com opacity reduzida
+- Ao desligar o switch, setar `followup_enabled: false`; ao ligar, setar `followup_enabled: true`
 
-1. **Filtro grupo** — `rawJid.endsWith("@g.us")` → descarta
-2. **Filtro fromMe** — `msg.key?.fromMe === true` → descarta (previne loop)
-3. **`normalizeContactNumber()`** — `jid.replace(/@.*$/, "").replace(/\D/g, "")` aplicado em todos os lookups e inserts
-4. **Device/agent lookup** — sem mudança
-5. **Blacklist** — comparação normalizada nos dois lados
-6. **Conversation lookup** — busca por `agent_id + device_id + contact_number` normalizado, incluindo `transferred` e `closed`
-7. **Early return para `transferred`/`closed`/`paused`** — salva mensagem **com `evolution_message_id`**, trata erro `23505` como duplicata, loga `msg.key?.id`, retorna sem chamar IA
-8. **Prospecting (is_waiting_reply)** — insere mensagem com `evolution_message_id` + trata `23505`
-9. **Upsert atômico** para criar conversa — `ignoreDuplicates: true`, `onConflict: "agent_id,device_id,contact_number"`
-10. **Insert de mensagem normal** com `evolution_message_id` + trata `23505`
-11. **Fluxo normal** → `process-message`
+**3. `src/pages/AgentWizard.tsx`** — No `handleSave`, se `followup_enabled === false`, salvar `followup_max: 0` no banco. Na carga do agente para edição, derivar `followup_enabled` de `followup_max > 0`.
 
-Correção crítica do usuário aplicada: **todos os inserts de mensagem** (inclusive dentro do early return) usam `evolution_message_id` e tratam `23505`.
+**4. `followup-cron/index.ts`** — Já funciona: a condição `conv.followup_count >= followupMax` com `followupMax = 0` bloqueia qualquer followup. Nenhuma mudança necessária.
 
-### 3. `process-message/index.ts` — Guardrail hard
+### Sem migration
 
-Substituir linhas 156-221 (free-response mode de ~65 linhas) por:
-
-```typescript
-if (["transferred", "closed", "paused"].includes(convCheck?.status)) {
-  console.log(`Conversation ${conversation_id} status=${convCheck.status} — AI completely stopped`);
-  return new Response(JSON.stringify({ ok: true, skipped: true, reason: convCheck.status }), {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
-```
-
-### 4. Deploy
-
-Ordem: Migration → evolution-webhook → process-message
-
-### Decisões confirmadas
-
-- **`paused`** = IA silenciosa (incluído nos early returns e no guardrail)
-- **`closed`** = incluído no guardrail do process-message (correção do usuário)
-- **Idempotência** = via índice único + tratamento de `23505` (sem SELECT prévio)
-- **Upsert** = `ignoreDuplicates: true` (não sobrescreve status existente)
-- **Sem reativação automática** — conversas travadas ficam travadas
+Não precisa de coluna nova no banco — `followup_max = 0` já desativa o comportamento. O campo `followup_enabled` é apenas estado local do wizard.
 
