@@ -85,8 +85,8 @@ serve(async (req) => {
       });
     }
 
-    // === 3. NORMALIZE ===
-    const contactNumber = normalizeContactNumber(rawJid);
+    // === 3. NORMALIZE (use canonicalPhone so BR numbers match blast-created conversations) ===
+    const contactNumber = canonicalPhone(rawJid);
     const content = msg.message?.conversation ||
       msg.message?.extendedTextMessage?.text ||
       msg.message?.imageMessage?.caption || "";
