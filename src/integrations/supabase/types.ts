@@ -428,6 +428,7 @@ export type Database = {
           content: string | null
           conversation_id: string
           created_at: string
+          evolution_message_id: string | null
           id: string
           media_type: Database["public"]["Enums"]["media_type"] | null
           media_url: string | null
@@ -437,6 +438,7 @@ export type Database = {
           content?: string | null
           conversation_id: string
           created_at?: string
+          evolution_message_id?: string | null
           id?: string
           media_type?: Database["public"]["Enums"]["media_type"] | null
           media_url?: string | null
@@ -446,6 +448,7 @@ export type Database = {
           content?: string | null
           conversation_id?: string
           created_at?: string
+          evolution_message_id?: string | null
           id?: string
           media_type?: Database["public"]["Enums"]["media_type"] | null
           media_url?: string | null
