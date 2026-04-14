@@ -1,25 +1,55 @@
 
 
-## Plano: Toggle para desativar followup nos agentes
+## Auditoria: Agente Eva — problemas encontrados
 
-### O que muda
+### Status atual da Eva no banco
+- `followup_max: 0` ✅ (toggle desativado corretamente)
+- `status: inactive` ✅ (não vai responder mensagens)
+- `type: prospecting`
 
-Adicionar um **Switch** no card de Followup (WizardStep5) que habilita/desabilita o followup. Quando desativado, `followup_max` será setado para `0` e os campos ficam desabilitados visualmente.
+### BUG CRÍTICO: followup_max = 0 não funciona
 
-### Implementação
+**Linha 75 do `followup-cron/index.ts`:**
+```typescript
+const followupMax = agent.followup_max || 3;
+```
 
-**1. `src/stores/agentStore.ts`** — Adicionar campo `followup_enabled: boolean` (default `true`) ao `AgentWizardData` e ao `initialWizardData`.
+JavaScript trata `0` como **falsy**. Quando `followup_max` é `0`, o `||` faz fallback para `3`. A Eva (e qualquer agente com followup desativado) **vai receber 3 followups mesmo assim**.
 
-**2. `src/components/wizard/WizardStep5.tsx`** — No card "Followup":
-- Adicionar `Switch` no header do card ao lado do título
-- Quando `followup_enabled = false`, desabilitar os 3 inputs (start, max, intervalo) com opacity reduzida
-- Ao desligar o switch, setar `followup_enabled: false`; ao ligar, setar `followup_enabled: true`
+**Correção:** Trocar `||` por `??` (nullish coalescing) nas 3 linhas:
+```typescript
+const followupMax = agent.followup_max ?? 3;
+const followupInterval = agent.followup_interval_minutes ?? 120;
+const followupStart = agent.followup_start_message ?? 3;
+```
 
-**3. `src/pages/AgentWizard.tsx`** — No `handleSave`, se `followup_enabled === false`, salvar `followup_max: 0` no banco. Na carga do agente para edição, derivar `followup_enabled` de `followup_max > 0`.
+### Blacklist — OK em todas as camadas
 
-**4. `followup-cron/index.ts`** — Já funciona: a condição `conv.followup_count >= followupMax` com `followupMax = 0` bloqueia qualquer followup. Nenhuma mudança necessária.
+| Camada | Status | Detalhes |
+|--------|--------|----------|
+| `evolution-webhook` | ✅ | Checa blacklist com `canonicalPhone`, fecha conversa se blacklisted |
+| `process-message` | ✅ | Guardrail de blacklist antes de chamar LLM |
+| `followup-cron` | ✅ | Checa blacklist, fecha conversa se blacklisted |
+| `blast-processor` | ✅ | Checa blacklist antes de enviar disparo |
 
-### Sem migration
+### Guardrails de status — OK
 
-Não precisa de coluna nova no banco — `followup_max = 0` já desativa o comportamento. O campo `followup_enabled` é apenas estado local do wizard.
+| Camada | Status | Detalhes |
+|--------|--------|----------|
+| `evolution-webhook` | ✅ | Early return para `transferred`, `closed`, `paused` — salva mensagem com `evolution_message_id` (idempotente) |
+| `process-message` | ✅ | Guardrail para `transferred`, `closed`, `paused` antes do LLM |
+
+### Detecção de desinteresse — OK
+- `process-message`: checa frases de desinteresse antes do LLM, fecha conversa
+- `followup-cron`: checa desinteresse antes de enviar followup, fecha conversa
+
+### Resumo de ações
+
+Apenas **1 correção** necessária:
+
+**Arquivo:** `supabase/functions/followup-cron/index.ts` (linha 75-77)
+
+Trocar `||` por `??` nas 3 atribuições de followup para que `0` seja respeitado como valor válido em vez de cair no fallback.
+
+Sem essa correção, o toggle de desativar followup **não funciona** — é o único bug real. Todo o resto (blacklist, guardrails de status, idempotência) está correto.
 
