@@ -72,9 +72,9 @@ serve(async (req) => {
         continue;
       }
 
-      const followupMax = agent.followup_max || 3;
-      const followupInterval = agent.followup_interval_minutes || 120;
-      const followupStart = agent.followup_start_message || 3;
+      const followupMax = agent.followup_max ?? 3;
+      const followupInterval = agent.followup_interval_minutes ?? 120;
+      const followupStart = agent.followup_start_message ?? 3;
 
       if (conv.followup_count >= followupMax) continue;
 
