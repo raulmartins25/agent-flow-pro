@@ -251,7 +251,7 @@ export default function AgentWizard() {
 
         await saveEcuroIntegration(id!);
 
-        toast.success('Agente atualizado com sucesso!');
+        toast.success(simulationOnly ? 'Agente atualizado (modo simulação — sem dispositivo)' : 'Agente atualizado com sucesso!');
       } else {
         // Create new agent
         const { data: agentData, error: agentError } = await supabase
@@ -298,7 +298,7 @@ export default function AgentWizard() {
 
         await saveEcuroIntegration(agentData.id);
 
-        toast.success('Agente criado com sucesso!');
+        toast.success(simulationOnly ? 'Agente criado em modo simulação (sem dispositivo)' : 'Agente criado com sucesso!');
       }
 
       resetWizard();
