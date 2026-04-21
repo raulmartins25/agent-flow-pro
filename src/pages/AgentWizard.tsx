@@ -12,6 +12,7 @@ import { WizardStep3 } from '@/components/wizard/WizardStep3';
 import { WizardStep4 } from '@/components/wizard/WizardStep4';
 import { WizardStep5 } from '@/components/wizard/WizardStep5';
 import { WizardStep6 } from '@/components/wizard/WizardStep6';
+import { WizardStep7 } from '@/components/wizard/WizardStep7';
 import { useState, useEffect } from 'react';
 
 const steps = [
@@ -21,6 +22,7 @@ const steps = [
   { title: 'Qualificação', component: WizardStep4 },
   { title: 'Objeções & Followup', component: WizardStep5 },
   { title: 'Transferência & LLM', component: WizardStep6 },
+  { title: 'Integrações', component: WizardStep7 },
 ];
 
 export default function AgentWizard() {
