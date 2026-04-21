@@ -42,6 +42,14 @@ interface AgentWizardData {
   llm_provider: 'claude' | 'openai' | 'deepseek';
   llm_model: string;
   llm_api_key: string;
+  // Step 7 - Ecuro integration
+  ecuro_enabled: boolean;
+  ecuro_environment: 'dev' | 'prod';
+  ecuro_clinic_id: string;
+  ecuro_clinic_name: string;
+  ecuro_specialty_id: string;
+  ecuro_specialty_name: string;
+  ecuro_default_duration: number;
 }
 
 interface AgentStore {
@@ -84,6 +92,13 @@ const initialWizardData: AgentWizardData = {
   llm_provider: 'claude',
   llm_model: 'claude-sonnet-4-20250514',
   llm_api_key: '',
+  ecuro_enabled: false,
+  ecuro_environment: 'dev',
+  ecuro_clinic_id: '',
+  ecuro_clinic_name: '',
+  ecuro_specialty_id: '',
+  ecuro_specialty_name: '',
+  ecuro_default_duration: 30,
 };
 
 export const useAgentStore = create<AgentStore>((set) => ({

@@ -12,6 +12,7 @@ import { WizardStep3 } from '@/components/wizard/WizardStep3';
 import { WizardStep4 } from '@/components/wizard/WizardStep4';
 import { WizardStep5 } from '@/components/wizard/WizardStep5';
 import { WizardStep6 } from '@/components/wizard/WizardStep6';
+import { WizardStep7 } from '@/components/wizard/WizardStep7';
 import { useState, useEffect } from 'react';
 
 const steps = [
@@ -21,6 +22,7 @@ const steps = [
   { title: 'Qualificação', component: WizardStep4 },
   { title: 'Objeções & Followup', component: WizardStep5 },
   { title: 'Transferência & LLM', component: WizardStep6 },
+  { title: 'Integrações', component: WizardStep7 },
 ];
 
 export default function AgentWizard() {
@@ -54,6 +56,14 @@ export default function AgentWizard() {
           .eq('agent_id', id)
           .single();
 
+        const { data: ecuroIntegRow } = await supabase
+          .from('agent_integrations')
+          .select('*')
+          .eq('agent_id', id)
+          .eq('provider', 'ecuro')
+          .maybeSingle();
+        const ecuroCfg = (ecuroIntegRow?.config as any) || {};
+
         loadWizardData({
           name: agent.name,
           type: agent.type,
@@ -84,6 +94,13 @@ export default function AgentWizard() {
           objection_handlers: (config?.objection_handlers as any[]) || [],
           transfer_summary_template: config?.transfer_summary_template || '',
           ban_triggers: agent.restrictions ? agent.restrictions.split(',').map((s: string) => s.trim()) : ['para', 'stop', 'me tira', 'não quero', 'denuncia', 'spam', 'me bloqueia'],
+          ecuro_enabled: !!ecuroIntegRow?.enabled,
+          ecuro_environment: (ecuroCfg.environment as 'dev' | 'prod') || 'dev',
+          ecuro_clinic_id: ecuroCfg.clinic_id || '',
+          ecuro_clinic_name: ecuroCfg.clinic_name || '',
+          ecuro_specialty_id: ecuroCfg.specialty_id || '',
+          ecuro_specialty_name: ecuroCfg.specialty_name || '',
+          ecuro_default_duration: ecuroCfg.default_duration || 30,
         }, id);
       } catch (e: any) {
         toast.error(e.message || 'Erro ao carregar agente');
@@ -116,6 +133,12 @@ export default function AgentWizard() {
       case 5:
         if (wizardData.llm_provider !== 'claude' && !wizardData.llm_api_key.trim()) return 'API Key da LLM é obrigatória';
         break;
+      case 6:
+        if (wizardData.ecuro_enabled) {
+          if (!wizardData.ecuro_clinic_id) return 'Selecione a clínica Ecuro';
+          if (!wizardData.ecuro_specialty_id) return 'Selecione a especialidade Ecuro padrão';
+        }
+        break;
     }
     return null;
   };
@@ -124,6 +147,34 @@ export default function AgentWizard() {
     const error = validateStep();
     if (error) { toast.error(error); return; }
     setCurrentStep(currentStep + 1);
+  };
+
+  const saveEcuroIntegration = async (agentId: string) => {
+    if (wizardData.ecuro_enabled) {
+      const { error: ecuroError } = await supabase
+        .from('agent_integrations')
+        .upsert({
+          agent_id: agentId,
+          provider: 'ecuro',
+          enabled: true,
+          config: {
+            environment: wizardData.ecuro_environment,
+            clinic_id: wizardData.ecuro_clinic_id,
+            clinic_name: wizardData.ecuro_clinic_name,
+            specialty_id: wizardData.ecuro_specialty_id,
+            specialty_name: wizardData.ecuro_specialty_name,
+            default_duration: wizardData.ecuro_default_duration,
+          },
+        }, { onConflict: 'agent_id,provider' });
+      if (ecuroError) throw ecuroError;
+    } else {
+      // Disable existing integration if any
+      await supabase
+        .from('agent_integrations')
+        .update({ enabled: false })
+        .eq('agent_id', agentId)
+        .eq('provider', 'ecuro');
+    }
   };
 
   const handleSave = async () => {
@@ -191,6 +242,8 @@ export default function AgentWizard() {
 
         if (configError) throw configError;
 
+        await saveEcuroIntegration(id!);
+
         toast.success('Agente atualizado com sucesso!');
       } else {
         // Create new agent
@@ -235,6 +288,8 @@ export default function AgentWizard() {
         });
 
         if (configError) throw configError;
+
+        await saveEcuroIntegration(agentData.id);
 
         toast.success('Agente criado com sucesso!');
       }

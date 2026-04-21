@@ -1,1 +1,13 @@
 project_id = "bcokzxaqwzsgszoltzuo"
+
+[functions.ecuro-list-clinics]
+verify_jwt = false
+
+[functions.ecuro-list-specialties]
+verify_jwt = false
+
+[functions.ecuro-availability]
+verify_jwt = false
+
+[functions.ecuro-schedule]
+verify_jwt = false
