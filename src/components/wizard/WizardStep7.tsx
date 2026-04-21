@@ -220,7 +220,7 @@ export function WizardStep7() {
 
             {wizardData.ecuro_clinic_id && wizardData.ecuro_specialty_id && (
               <div className="rounded-lg bg-muted/40 p-3 text-xs space-y-1">
-                <p className="flex items-center gap-1 text-green-600">
+                <p className="flex items-center gap-1 text-primary">
                   <CheckCircle2 className="h-3 w-3" /> Configuração pronta
                 </p>
                 <p><strong>Clínica:</strong> {wizardData.ecuro_clinic_name}</p>
