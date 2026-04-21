@@ -1,67 +1,47 @@
 
 
-## Plano: Criar agente receptivo "Clínica Odontológica" + integração Ecuro
+## Ajuste: Seleção de clínica + especialidade no Wizard
 
-### Resumo
-Criar manualmente um novo agente receptivo no wizard com toda a configuração odontológica fornecida, mais integração com API da Ecuro para agendamento (requer credenciais).
+### Mudança no plano original
 
-### Parte 1 — Configuração do agente (wizard, sem código)
+A integração Ecuro já previa selecionar `clinic_id` e `specialty_id` na UI, mas vou deixar explícito como funciona quando há **múltiplas clínicas**.
 
-Você abre `/agents/new` e preenche os 6 passos com os dados abaixo.
+### UI no Wizard (novo Step 7 "Integrações" ou card no Step 6)
 
-**Step 1 — Tipo e dispositivo**
-- Tipo: **Receptivo**
-- Nome: `Clínica Odontológica`
-- Dispositivo: selecionar o WhatsApp da clínica
+**Card "Agendamento Ecuro"**
+1. **Switch** "Ativar agendamento via Ecuro"
+2. Ao ativar, chama `ecuro-list-clinics` (edge function proxy) e popula:
+   - **Select de clínica** (obrigatório) — lista todas as clínicas retornadas pela API com nome + cidade/identificador para diferenciar
+3. Ao escolher clínica, chama `ecuro-list-specialties?clinicId=...` e popula:
+   - **Select de especialidade default** (obrigatório) — ex: "Implantodontia", "Avaliação"
+4. **Input duração** (minutos, default 30)
 
-**Step 2 — Identidade**
-- Persona: definir (ex: `Ana`)
-- Empresa: `[Nome da Clínica]`
-- Segmento: `Odontologia`
-- Tom: **Semi-formal**
-- Descrição produto/serviço: especialidades + diferenciais (implante protocolo, zigomático, ortodontia, estética, odontopediatria, avaliação gratuita com exame de imagem, anestesia geral)
-- Restrições da IA: bloco completo "RESTRIÇÕES E INSTRUÇÕES DE COMPORTAMENTO" do prompt (fluxo após 4 perguntas, regras de agendamento, recusa, cancelamento, valores, descontos, planos, aposentados, odontopediatria, acompanhante, identidade, mensagem duplicada)
-
-**Step 3 — Mensagem de boas-vindas**
+Tudo é salvo em `agent_integrations.config`:
+```json
+{
+  "clinic_id": "uuid-da-clinica-escolhida",
+  "clinic_name": "Unidade Centro",
+  "specialty_id": "uuid-especialidade",
+  "specialty_name": "Avaliação",
+  "default_duration": 30
+}
 ```
-Olá {{nome_contato}}! Seja bem-vindo(a) 😊 Aqui é da [Nome da Clínica]. Estou aqui para te ajudar a dar o primeiro passo em direção ao seu tratamento. Me conta: o que o(a) senhor(a) procura? Como posso te ajudar?
-```
 
-**Step 4 — Perguntas de qualificação** (4 perguntas, sem mídia)
-1. O que o(a) senhor(a) procura? Como posso te ajudar?
-2. Há quanto tempo o(a) senhor(a) está nessa situação?
-3. Sente dor por causa dessa situação?
-4. Essa situação te impede de tirar fotos ou sorrir com naturalidade?
+### Como a IA usa em runtime
 
-**Step 5 — Objeções + followup + anti-ban**
-Objeções sugeridas:
-- "Tá caro" → "Quem pode avaliar uma condição especial para o seu caso é o próprio Dr. responsável, na consulta. Posso te ajudar a agendar? 😊"
-- "Quero saber o preço antes" → "Para o Dr. avaliar o valor certinho, ele precisa ver o exame de imagem e olhar em boca. Na avaliação presencial fazemos isso sem custo 😊"
-- "Não posso ir agora" → "Entendo! Me conta o que está dificultando — quem sabe consigo encaixar em um horário melhor 😊"
-- "Quero cancelar" → "Puxa, que pena! Aconteceu algo? Podemos remarcar para um dia melhor 😊"
+As tools `get_availability` e `schedule_appointment` no `process-message` leem `agent_integrations.config` do agente e injetam **automaticamente** `clinic_id` + `specialty_id` nas chamadas Ecuro. A IA **não escolhe clínica** — é fixa por agente.
 
-Followup: ativado, start na msg 3, máximo 3, intervalo 120min
+### Recomendação para múltiplas clínicas
 
-**Step 6 — Transferência + LLM**
-- Número de transferência: WhatsApp do atendimento humano da clínica
-- Trigger: **after_all_questions**
-- Template do resumo: incluir nome, telefone, as 4 respostas, e flag se é caso de exame/aposentado
-- LLM: **Claude sonnet** (já default)
+**1 agente = 1 clínica.** Se a clínica Eva tem 3 unidades, você cria 3 agentes (Eva-Centro, Eva-Norte, Eva-Sul), cada um com seu próprio dispositivo WhatsApp e sua própria `clinic_id` configurada. Isso é mais limpo que tentar a IA decidir a unidade no meio da conversa.
 
-### Parte 2 — Integração Ecuro (precisa código + credenciais)
+Se quiser **1 agente atendendo múltiplas clínicas** (ex: lead escolhe a unidade na conversa), me avise — exige mudar a tool `get_availability` para aceitar `clinic_id` como parâmetro e adicionar uma tool `list_clinics` para a IA oferecer opções ao lead. Mais complexo e propenso a erro.
 
-A integração Ecuro requer:
-- Edge function `ecuro-availability` — busca horários disponíveis
-- Edge function `ecuro-schedule` — confirma agendamento
-- Tool calling no `process-message` para o LLM consultar/agendar via Ecuro
+### Resto do plano sem alteração
 
-**Eu preciso de:**
-1. URL base da API Ecuro
-2. Tipo de autenticação (API key, OAuth, etc.)
-3. Endpoints de "listar disponibilidade" e "criar agendamento" (ou link da doc)
+Migration `agent_integrations`, secret `ECURO_API_TOKEN`, edge functions (`ecuro-list-clinics`, `ecuro-list-specialties`, `ecuro-availability`, `ecuro-schedule`) e tool calling no `process-message` permanecem iguais.
 
-Sem isso a IA seguirá o fluxo de qualificação e transferirá para humano no agendamento (que é o fallback seguro).
+### Pergunta antes de implementar
 
-### Recomendação
-Faça você o cadastro do agente pelo wizard (5min, todos os campos prontos acima). Quando tiver as credenciais Ecuro, abra um novo chat com a documentação da API e eu implemento a integração de agendamento automatizado.
+Confirma o modelo **1 agente por clínica** (recomendado) ou quer **1 agente multi-clínica** com o lead escolhendo a unidade?
 
