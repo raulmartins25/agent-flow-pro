@@ -55,15 +55,13 @@ Deno.serve(async (req) => {
     const sd = start_date || today.toISOString().slice(0, 10);
     const ed = end_date || future.toISOString().slice(0, 10);
 
-    const res = await ecuroFetch(env, '/specialty-availability-webhook', {
-      method: 'POST',
-      body: JSON.stringify({
-        clinicId: cfg.clinic_id,
-        specialtyId: cfg.specialty_id,
-        startDate: sd,
-        endDate: ed,
-      }),
-    });
+    const qs = new URLSearchParams({
+      clinicId: cfg.clinic_id,
+      specialtyId: cfg.specialty_id,
+      startDate: sd,
+      endDate: ed,
+    }).toString();
+    const res = await ecuroFetch(env, `/specialty-availability?${qs}`, { method: 'GET' });
     const text = await res.text();
     let data: any;
     try { data = JSON.parse(text); } catch { data = text; }
