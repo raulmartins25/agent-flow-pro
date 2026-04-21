@@ -55,8 +55,15 @@ Deno.serve(async (req) => {
     const sd = start_date || today.toISOString().slice(0, 10);
     const ed = end_date || future.toISOString().slice(0, 10);
 
-    const path = `/specialty-availability?clinicId=${encodeURIComponent(cfg.clinic_id)}&specialtyId=${encodeURIComponent(cfg.specialty_id)}&startDate=${sd}&endDate=${ed}`;
-    const res = await ecuroFetch(env, path, { method: 'GET' });
+    const res = await ecuroFetch(env, '/specialty-availability-webhook', {
+      method: 'POST',
+      body: JSON.stringify({
+        clinicId: cfg.clinic_id,
+        specialtyId: cfg.specialty_id,
+        startDate: sd,
+        endDate: ed,
+      }),
+    });
     const text = await res.text();
     let data: any;
     try { data = JSON.parse(text); } catch { data = text; }

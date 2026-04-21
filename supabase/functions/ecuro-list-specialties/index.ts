@@ -13,8 +13,10 @@ Deno.serve(async (req) => {
     const env = (url.searchParams.get('env') === 'prod' ? 'prod' : 'dev') as 'dev' | 'prod';
     const clinicId = url.searchParams.get('clinicId');
 
-    const path = clinicId ? `/list-specialties?clinicId=${encodeURIComponent(clinicId)}` : '/list-specialties';
-    const res = await ecuroFetch(env, path, { method: 'GET' });
+    const res = await ecuroFetch(env, '/list-specialties-webhook', {
+      method: 'POST',
+      body: JSON.stringify(clinicId ? { clinicId } : {}),
+    });
     const text = await res.text();
     let data: unknown;
     try { data = JSON.parse(text); } catch { data = text; }

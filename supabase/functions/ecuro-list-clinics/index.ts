@@ -12,7 +12,10 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const env = (url.searchParams.get('env') === 'prod' ? 'prod' : 'dev') as 'dev' | 'prod';
 
-    const res = await ecuroFetch(env, '/list-clinics', { method: 'GET' });
+    const res = await ecuroFetch(env, '/list-clinics-webhook', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
     const text = await res.text();
     let data: unknown;
     try { data = JSON.parse(text); } catch { data = text; }
