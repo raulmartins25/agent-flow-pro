@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.ecuro-schedule]
 verify_jwt = false
+
+[functions.public-simulator-agent]
+verify_jwt = false
+
+[functions.public-simulator-chat]
+verify_jwt = false
