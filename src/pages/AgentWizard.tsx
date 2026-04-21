@@ -183,6 +183,12 @@ export default function AgentWizard() {
     const error = validateStep();
     if (error) { toast.error(error); return; }
 
+    if (!wizardData.device_id) {
+      toast.error('Selecione um dispositivo WhatsApp na etapa 1');
+      setCurrentStep(0);
+      return;
+    }
+
     // Check if device already has an active agent (exclude self when editing)
     const { data: existingAgents } = await supabase
       .from('agents')
