@@ -166,6 +166,9 @@ export default function SimulatorPage() {
           <Button variant="outline" size="sm" className="w-full justify-start" onClick={() => setShowPrompt(!showPrompt)}>
             <FileText className="mr-2 h-4 w-4" />{showPrompt ? 'Ocultar prompt' : 'Ver prompt'}
           </Button>
+          <Button variant="outline" size="sm" className="w-full justify-start" onClick={() => { setEditedPrompt(compiledPrompt); setEditPromptOpen(true); }}>
+            <Pencil className="mr-2 h-4 w-4" />Editar prompt (avançado)
+          </Button>
           <Button variant="outline" size="sm" className="w-full justify-start" onClick={generateShareLink}>
             <Share2 className="mr-2 h-4 w-4" />Compartilhar
           </Button>
