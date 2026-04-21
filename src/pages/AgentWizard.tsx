@@ -1,7 +1,8 @@
 import { useNavigate, useParams } from 'react-router-dom';
-import { Check } from 'lucide-react';
+import { Check, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAgentStore } from '@/stores/agentStore';
+import { dentalClinicDraft } from '@/lib/draftTemplates';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/integrations/supabase/client';
 import { compileAgentPrompt } from '@/lib/compilePrompt';
@@ -28,7 +29,7 @@ const steps = [
 export default function AgentWizard() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { wizardData, currentStep, setCurrentStep, resetWizard, editingAgentId, loadWizardData } = useAgentStore();
+  const { wizardData, currentStep, setCurrentStep, resetWizard, editingAgentId, loadWizardData, updateWizardData } = useAgentStore();
   const user = useAuthStore((s) => s.user);
   const [saving, setSaving] = useState(false);
   const [loadingAgent, setLoadingAgent] = useState(false);
@@ -315,9 +316,24 @@ export default function AgentWizard() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">{isEditing ? 'Editar Agente' : 'Novo Agente'}</h1>
-        <p className="text-muted-foreground">Configure seu agente passo a passo</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold">{isEditing ? 'Editar Agente' : 'Novo Agente'}</h1>
+          <p className="text-muted-foreground">Configure seu agente passo a passo</p>
+        </div>
+        {!isEditing && (
+          <Button
+            variant="outline"
+            onClick={() => {
+              updateWizardData(dentalClinicDraft);
+              setCurrentStep(0);
+              toast.success('Rascunho carregado — revise e ajuste cada passo');
+            }}
+          >
+            <Sparkles className="w-4 h-4" />
+            Carregar rascunho: Clínica Odontológica
+          </Button>
+        )}
       </div>
 
       {/* Stepper */}
