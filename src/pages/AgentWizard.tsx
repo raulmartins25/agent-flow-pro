@@ -56,6 +56,14 @@ export default function AgentWizard() {
           .eq('agent_id', id)
           .single();
 
+        const { data: ecuroIntegRow } = await supabase
+          .from('agent_integrations')
+          .select('*')
+          .eq('agent_id', id)
+          .eq('provider', 'ecuro')
+          .maybeSingle();
+        const ecuroCfg = (ecuroIntegRow?.config as any) || {};
+
         loadWizardData({
           name: agent.name,
           type: agent.type,
@@ -86,6 +94,13 @@ export default function AgentWizard() {
           objection_handlers: (config?.objection_handlers as any[]) || [],
           transfer_summary_template: config?.transfer_summary_template || '',
           ban_triggers: agent.restrictions ? agent.restrictions.split(',').map((s: string) => s.trim()) : ['para', 'stop', 'me tira', 'não quero', 'denuncia', 'spam', 'me bloqueia'],
+          ecuro_enabled: !!ecuroIntegRow?.enabled,
+          ecuro_environment: (ecuroCfg.environment as 'dev' | 'prod') || 'dev',
+          ecuro_clinic_id: ecuroCfg.clinic_id || '',
+          ecuro_clinic_name: ecuroCfg.clinic_name || '',
+          ecuro_specialty_id: ecuroCfg.specialty_id || '',
+          ecuro_specialty_name: ecuroCfg.specialty_name || '',
+          ecuro_default_duration: ecuroCfg.default_duration || 30,
         }, id);
       } catch (e: any) {
         toast.error(e.message || 'Erro ao carregar agente');
