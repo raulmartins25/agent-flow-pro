@@ -267,6 +267,30 @@ export default function SimulatorPage() {
           </div>
         </div>
       </div>
+
+      <Dialog open={editPromptOpen} onOpenChange={setEditPromptOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Editar prompt do agente</DialogTitle>
+            <DialogDescription>
+              Recurso avançado. Salvar marca o agente como "prompt customizado" — futuras edições nos campos do wizard não regeneram este texto.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={editedPrompt}
+            onChange={(e) => setEditedPrompt(e.target.value)}
+            rows={20}
+            className="font-mono text-xs"
+          />
+          <p className="text-xs text-muted-foreground">{editedPrompt.length} caracteres</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditPromptOpen(false)}>Cancelar</Button>
+            <Button onClick={savePrompt} disabled={savingPrompt || !editedPrompt.trim()}>
+              {savingPrompt ? 'Salvando...' : 'Salvar prompt'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
