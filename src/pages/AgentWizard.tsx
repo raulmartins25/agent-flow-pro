@@ -117,7 +117,7 @@ export default function AgentWizard() {
     switch (currentStep) {
       case 0:
         if (!wizardData.name.trim()) return 'Nome do agente é obrigatório';
-        if (!wizardData.device_id) return 'Selecione um dispositivo WhatsApp';
+        // device_id é opcional — sem dispositivo, agente fica em modo simulação
         break;
       case 1:
         if (!wizardData.agent_persona_name.trim()) return 'Nome do agente persona é obrigatório';
@@ -183,23 +183,22 @@ export default function AgentWizard() {
     const error = validateStep();
     if (error) { toast.error(error); return; }
 
-    if (!wizardData.device_id) {
-      toast.error('Selecione um dispositivo WhatsApp na etapa 1');
-      setCurrentStep(0);
-      return;
-    }
+    const deviceId = wizardData.device_id || null;
+    const simulationOnly = !deviceId;
 
-    // Check if device already has an active agent (exclude self when editing)
-    const { data: existingAgents } = await supabase
-      .from('agents')
-      .select('id, name')
-      .eq('device_id', wizardData.device_id)
-      .eq('status', 'active')
-      .neq('id', isEditing ? id! : '00000000-0000-0000-0000-000000000000');
+    // Check device conflict only if a device was selected
+    if (deviceId) {
+      const { data: existingAgents } = await supabase
+        .from('agents')
+        .select('id, name')
+        .eq('device_id', deviceId)
+        .eq('status', 'active')
+        .neq('id', isEditing ? id! : '00000000-0000-0000-0000-000000000000');
 
-    if (existingAgents && existingAgents.length > 0) {
-      toast.error(`Este dispositivo já tem um agente ativo: ${existingAgents[0].name}`);
-      return;
+      if (existingAgents && existingAgents.length > 0) {
+        toast.error(`Este dispositivo já tem um agente ativo: ${existingAgents[0].name}`);
+        return;
+      }
     }
 
     setSaving(true);
@@ -213,7 +212,8 @@ export default function AgentWizard() {
           .update({
             name: wizardData.name,
             type: wizardData.type,
-            device_id: wizardData.device_id,
+            device_id: deviceId,
+            status: simulationOnly ? 'paused' : 'active',
             llm_provider: wizardData.llm_provider,
             llm_model: wizardData.llm_model,
             llm_api_key: wizardData.llm_api_key || null,
@@ -260,8 +260,8 @@ export default function AgentWizard() {
             user_id: user.id,
             name: wizardData.name,
             type: wizardData.type,
-            status: 'active',
-            device_id: wizardData.device_id,
+            status: simulationOnly ? 'paused' : 'active',
+            device_id: deviceId,
             llm_provider: wizardData.llm_provider,
             llm_model: wizardData.llm_model,
             llm_api_key: wizardData.llm_api_key || null,
