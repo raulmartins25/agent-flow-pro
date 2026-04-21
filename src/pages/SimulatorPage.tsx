@@ -3,9 +3,11 @@ import { useParams, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Send, RotateCcw, FileText, Share2, CheckCircle2, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Send, RotateCcw, FileText, Share2, CheckCircle2, Loader2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { compileAgentPrompt } from '@/lib/compilePrompt';
 
@@ -22,6 +24,9 @@ export default function SimulatorPage() {
   const [transferred, setTransferred] = useState(false);
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
+  const [editPromptOpen, setEditPromptOpen] = useState(false);
+  const [editedPrompt, setEditedPrompt] = useState('');
+  const [savingPrompt, setSavingPrompt] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
