@@ -1,33 +1,54 @@
 
 
-## Corrigir simulador para usar DeepSeek
+## Corrigir link público do simulador
 
-### Causa real
+### Causa
 
-O simulador está chamando DeepSeek com o modelo `deepseek-v3`, que **não existe**. O modelo correto da DeepSeek é `deepseek-chat` (V3) ou `deepseek-reasoner` (R1). A API retorna erro, e como o código faz `data.choices?.[0]?.message?.content || ""`, mascara como string vazia → toast genérico "não consegui processar".
+A página pública `/simulator/share/:token` valida o token corretamente, mas em seguida tenta ler `agents` e `agent_config` — duas tabelas cuja RLS exige `auth.uid() = user_id`. Como o visitante não está logado, as queries voltam vazias e a página mostra "Link expirado ou inválido".
+
+### Solução: edge function pública
+
+Criar uma edge function `public-simulator-agent` (com `verify_jwt = false`) que:
+1. Recebe `{ token }`.
+2. Valida o token usando o **service role key** (bypassa RLS) — verifica `expires_at > now()`.
+3. Retorna apenas os campos necessários do `agents` e `agent_config` (nada de `llm_api_key`, `evolution_api_key`, etc — só o que o simulador precisa).
+4. Se token inválido/expirado, retorna 404.
+
+E criar **`public-simulator-chat`** (também `verify_jwt = false`) que:
+1. Recebe `{ token, messages }`.
+2. Valida o token novamente (segurança).
+3. Carrega prompt + credenciais LLM do agente no servidor (o cliente público nunca vê as chaves).
+4. Chama DeepSeek/OpenAI/Lovable AI usando a mesma lógica do `simulate-chat` atual.
+5. Retorna `{ response }`.
 
 ### Mudanças
 
-**`supabase/functions/simulate-chat/index.ts`**
-- Manter respeito ao `llm_provider` do agente (DeepSeek/OpenAI/Lovable).
-- Para DeepSeek: se `llm_model` for inválido/vazio, fazer fallback para `deepseek-chat`. Aceitar variações comuns (`deepseek-v3` → `deepseek-chat`, `deepseek-r1` → `deepseek-reasoner`).
-- Tratar erro de forma explícita: se a API retornar não-2xx ou sem `content`, devolver HTTP 500 com `error` contendo status + corpo da resposta (não mais string vazia silenciosa).
-- Adicionar logs (`console.log`) com provider, model, status, e snippet do erro para debug futuro.
-- Mesmo tratamento melhorado para OpenAI (fallback de modelo + erro explícito).
+**`supabase/functions/public-simulator-agent/index.ts`** (novo)
+- GET/POST com token → retorna `{ agent: { id, name, type }, config: { agent_persona_name, company_name, welcome_message, first_prospecting_message, qualification_questions } }`.
 
-**`src/pages/SimulatorPage.tsx` e `src/pages/PublicSimulatorPage.tsx`**
-- Quando `invoke` retornar `error` ou `data.error`, mostrar a mensagem real via toast em vez de inserir "Desculpe, não consegui processar...".
+**`supabase/functions/public-simulator-chat/index.ts`** (novo)
+- POST `{ token, messages }` → valida, carrega agente via service role, executa LLM, retorna resposta. Reutiliza a lógica de normalização de modelo do `simulate-chat`.
 
-**`src/components/wizard/WizardStep6.tsx`** (correção de origem)
-- Atualizar as opções de modelo DeepSeek no seletor para os nomes válidos (`deepseek-chat`, `deepseek-reasoner`) — assim novos agentes não nascem com `deepseek-v3` quebrado.
+**`supabase/config.toml`**
+- Adicionar `[functions.public-simulator-agent]` e `[functions.public-simulator-chat]` com `verify_jwt = false`.
+
+**`src/pages/PublicSimulatorPage.tsx`**
+- Trocar as queries diretas ao Supabase por chamadas às duas edge functions.
+- Manter UI atual (header, mensagens, input, transferred badge).
+- Nunca enviar `llm_api_key` do cliente — agora vem do servidor.
+
+### Segurança
+
+- Chaves de LLM e Evolution **nunca** trafegam para o cliente público.
+- Apenas campos seguros são expostos (nome do agente, persona, mensagens de boas-vindas, perguntas de qualificação).
+- Token continua expirando em 7 dias (já existe).
+- RLS atual permanece intocada — apenas o backend valida e bypassa via service role de forma controlada.
 
 ### Validação
 
-1. Abrir `/agents/9d01e0ff…/simulator` → enviar mensagem → deve receber resposta da Jordana via DeepSeek.
-2. Se a chave estiver errada, o toast mostrará o erro real da DeepSeek (ex: "Invalid API key") em vez de mascarar.
-3. Editar o agente → Step 6 → o seletor mostrará `deepseek-chat` / `deepseek-reasoner` (não mais `deepseek-v3`).
-
-### Observação sobre o agente atual
-
-O agente "Jordana" está salvo com `llm_model = "deepseek-v3"`. O fallback no edge function vai traduzir isso para `deepseek-chat` automaticamente, então funcionará sem você precisar reeditar. Mas recomendo abrir o agente uma vez e re-salvar para gravar o modelo correto.
+1. Página `/agents/:id/simulator` → Compartilhar → copiar link.
+2. Abrir o link em aba anônima (sem login).
+3. Deve carregar a Jordana com mensagem de boas-vindas.
+4. Enviar mensagem → resposta real do DeepSeek.
+5. Após 7 dias (ou se deletar o token), mostrará "Link expirado ou inválido".
 
