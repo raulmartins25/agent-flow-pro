@@ -120,6 +120,7 @@ export type Database = {
       agents: {
         Row: {
           created_at: string
+          custom_prompt_enabled: boolean
           device_id: string | null
           followup_interval_minutes: number | null
           followup_max: number | null
@@ -140,6 +141,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          custom_prompt_enabled?: boolean
           device_id?: string | null
           followup_interval_minutes?: number | null
           followup_max?: number | null
@@ -160,6 +162,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          custom_prompt_enabled?: boolean
           device_id?: string | null
           followup_interval_minutes?: number | null
           followup_max?: number | null
