@@ -1,9 +1,9 @@
 // Shared Ecuro API helper
 export function getEcuroBase(env: 'dev' | 'prod' = 'dev'): string {
   if (env === 'prod') {
-    return Deno.env.get('ECURO_PROD_BASE_URL') || 'https://clinics.api.ecuro.com.br/api/v1';
+    return Deno.env.get('ECURO_PROD_BASE_URL') || 'https://clinics.api.ecuro.com.br/api/v1/ecuro-light';
   }
-  return 'https://clinics.api.dev.ecuro.com.br/api/v1';
+  return Deno.env.get('ECURO_DEV_BASE_URL') || 'https://clinics.api.dev.ecuro.com.br/api/v1/ecuro-light';
 }
 
 export async function ecuroFetch(
