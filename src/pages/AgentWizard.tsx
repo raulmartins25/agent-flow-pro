@@ -149,6 +149,34 @@ export default function AgentWizard() {
     setCurrentStep(currentStep + 1);
   };
 
+  const saveEcuroIntegration = async (agentId: string) => {
+    if (wizardData.ecuro_enabled) {
+      const { error: ecuroError } = await supabase
+        .from('agent_integrations')
+        .upsert({
+          agent_id: agentId,
+          provider: 'ecuro',
+          enabled: true,
+          config: {
+            environment: wizardData.ecuro_environment,
+            clinic_id: wizardData.ecuro_clinic_id,
+            clinic_name: wizardData.ecuro_clinic_name,
+            specialty_id: wizardData.ecuro_specialty_id,
+            specialty_name: wizardData.ecuro_specialty_name,
+            default_duration: wizardData.ecuro_default_duration,
+          },
+        }, { onConflict: 'agent_id,provider' });
+      if (ecuroError) throw ecuroError;
+    } else {
+      // Disable existing integration if any
+      await supabase
+        .from('agent_integrations')
+        .update({ enabled: false })
+        .eq('agent_id', agentId)
+        .eq('provider', 'ecuro');
+    }
+  };
+
   const handleSave = async () => {
     if (!user) { toast.error('Faça login para salvar'); return; }
     const error = validateStep();
