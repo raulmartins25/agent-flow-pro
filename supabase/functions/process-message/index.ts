@@ -259,16 +259,114 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
 
     let aiResponse = "";
 
+    // Check if Ecuro integration is enabled for this agent
+    const { data: ecuroIntegration } = await supabase
+      .from("agent_integrations")
+      .select("enabled, config")
+      .eq("agent_id", agent.id)
+      .eq("provider", "ecuro")
+      .maybeSingle();
+    const ecuroEnabled = !!ecuroIntegration?.enabled;
+
+    const ecuroTools = ecuroEnabled ? [
+      {
+        type: "function",
+        function: {
+          name: "get_availability",
+          description: "Buscar horários disponíveis nos próximos 7 dias para a clínica e especialidade configuradas. Use ANTES de propor qualquer horário ao paciente.",
+          parameters: {
+            type: "object",
+            properties: {
+              start_date: { type: "string", description: "Data inicial YYYY-MM-DD (opcional)" },
+              end_date: { type: "string", description: "Data final YYYY-MM-DD (opcional)" },
+            },
+          },
+        },
+      },
+      {
+        type: "function",
+        function: {
+          name: "schedule_appointment",
+          description: "Criar o agendamento depois que o paciente confirmar um horário específico retornado por get_availability.",
+          parameters: {
+            type: "object",
+            required: ["start_time", "patient_name"],
+            properties: {
+              start_time: { type: "string", description: "ISO 8601 do horário escolhido (use o valor exato retornado por get_availability)" },
+              end_time: { type: "string", description: "ISO 8601 do término (opcional)" },
+              patient_name: { type: "string", description: "Nome do paciente" },
+              patient_cpf: { type: "string" },
+              patient_email: { type: "string" },
+              patient_birthdate: { type: "string", description: "YYYY-MM-DD (opcional)" },
+            },
+          },
+        },
+      },
+    ] : undefined;
+
+    async function runEcuroTool(name: string, args: any) {
+      const supaUrl = Deno.env.get("SUPABASE_URL")!;
+      try {
+        if (name === "get_availability") {
+          const r = await fetch(`${supaUrl}/functions/v1/ecuro-availability`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ agent_id: agent.id, ...args }),
+          });
+          return await r.json();
+        }
+        if (name === "schedule_appointment") {
+          const r = await fetch(`${supaUrl}/functions/v1/ecuro-schedule`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              agent_id: agent.id,
+              conversation_id,
+              patient_phone: contact_number,
+              ...args,
+            }),
+          });
+          return await r.json();
+        }
+        return { error: "unknown tool" };
+      } catch (e) {
+        return { error: String(e) };
+      }
+    }
+
     if (agent.llm_provider === "claude") {
       const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-      const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "google/gemini-2.5-flash", messages, stream: false }),
-      });
-      if (!res.ok) { const t = await res.text(); throw new Error(`AI gateway error ${res.status}: ${t}`); }
-      const data = await res.json();
-      aiResponse = data.choices?.[0]?.message?.content || "";
+      const conv = [...messages];
+      for (let iter = 0; iter < 4; iter++) {
+        const body: any = { model: "google/gemini-2.5-flash", messages: conv, stream: false };
+        if (ecuroTools) { body.tools = ecuroTools; body.tool_choice = "auto"; }
+        const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) { const t = await res.text(); throw new Error(`AI gateway error ${res.status}: ${t}`); }
+        const data = await res.json();
+        const choice = data.choices?.[0]?.message;
+        const toolCalls = choice?.tool_calls;
+        if (toolCalls && toolCalls.length > 0) {
+          conv.push({ role: "assistant", content: choice.content || "", tool_calls: toolCalls } as any);
+          for (const tc of toolCalls) {
+            let parsedArgs: any = {};
+            try { parsedArgs = JSON.parse(tc.function?.arguments || "{}"); } catch {}
+            const toolResult = await runEcuroTool(tc.function?.name, parsedArgs);
+            console.log(`Ecuro tool ${tc.function?.name} →`, JSON.stringify(toolResult).substring(0, 300));
+            conv.push({
+              role: "tool",
+              tool_call_id: tc.id,
+              content: JSON.stringify(toolResult),
+            } as any);
+          }
+          continue;
+        }
+        aiResponse = choice?.content || "";
+        break;
+      }
     } else if (agent.llm_provider === "openai") {
       const res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
