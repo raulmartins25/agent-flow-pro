@@ -137,7 +137,20 @@ export default function SimulatorPage() {
     setShareToken(token);
     const url = `${window.location.origin}/simulator/share/${token}`;
     await navigator.clipboard.writeText(url);
-    toast.success('Link copiado!');
+  };
+
+  const savePrompt = async () => {
+    if (!id) return;
+    setSavingPrompt(true);
+    const { error } = await supabase
+      .from('agents')
+      .update({ prompt_compiled: editedPrompt, custom_prompt_enabled: true })
+      .eq('id', id);
+    setSavingPrompt(false);
+    if (error) { toast.error(error.message); return; }
+    setAgent({ ...agent, prompt_compiled: editedPrompt, custom_prompt_enabled: true });
+    toast.success('Prompt salvo. Será usado na próxima mensagem.');
+    setEditPromptOpen(false);
   };
 
   if (!agent) {
