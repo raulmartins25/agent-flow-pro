@@ -133,6 +133,12 @@ export default function AgentWizard() {
       case 5:
         if (wizardData.llm_provider !== 'claude' && !wizardData.llm_api_key.trim()) return 'API Key da LLM é obrigatória';
         break;
+      case 6:
+        if (wizardData.ecuro_enabled) {
+          if (!wizardData.ecuro_clinic_id) return 'Selecione a clínica Ecuro';
+          if (!wizardData.ecuro_specialty_id) return 'Selecione a especialidade Ecuro padrão';
+        }
+        break;
     }
     return null;
   };
@@ -208,6 +214,8 @@ export default function AgentWizard() {
 
         if (configError) throw configError;
 
+        await saveEcuroIntegration(id!);
+
         toast.success('Agente atualizado com sucesso!');
       } else {
         // Create new agent
@@ -252,6 +260,8 @@ export default function AgentWizard() {
         });
 
         if (configError) throw configError;
+
+        await saveEcuroIntegration(agentData.id);
 
         toast.success('Agente criado com sucesso!');
       }
