@@ -222,14 +222,7 @@ export default function AgentWizard() {
             llm_model: wizardData.llm_model,
             llm_api_key: wizardData.llm_api_key || null,
             prompt_compiled: prompt,
-            restrictions: wizardData.ai_restrictions || null,
-            transfer_number: wizardData.transfer_number || null,
-            transfer_trigger: wizardData.transfer_trigger || null,
-            followup_start_message: wizardData.followup_start_message,
-            followup_max: wizardData.followup_enabled ? wizardData.followup_max : 0,
-            followup_interval_minutes: wizardData.followup_interval_minutes,
-          })
-          .eq('id', id!);
+            custom_prompt_enabled: wizardData.custom_prompt_enabled,
 
         if (agentError) throw agentError;
 
