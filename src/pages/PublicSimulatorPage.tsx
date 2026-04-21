@@ -22,20 +22,14 @@ export default function PublicSimulatorPage() {
 
   useEffect(() => {
     if (!token) return;
-    const fetch = async () => {
-      const { data: share } = await supabase
-        .from('simulator_shares')
-        .select('agent_id')
-        .eq('token', token)
-        .gt('expires_at', new Date().toISOString())
-        .single();
+    const load = async () => {
+      const { data, error } = await supabase.functions.invoke('public-simulator-agent', {
+        body: { token },
+      });
+      if (error || !data?.agent) { setNotFound(true); return; }
 
-      if (!share) { setNotFound(true); return; }
-
-      const { data: ag } = await supabase.from('agents').select('*').eq('id', share.agent_id).single();
-      const { data: cfg } = await supabase.from('agent_config').select('*').eq('agent_id', share.agent_id).single();
-
-      if (!ag) { setNotFound(true); return; }
+      const ag = data.agent;
+      const cfg = data.config;
       setAgent(ag);
       setConfig(cfg);
 
@@ -48,7 +42,7 @@ export default function PublicSimulatorPage() {
         .replace('{{empresa}}', cfg?.company_name || 'Empresa');
       setMessages([{ role: 'assistant', content: formatted }]);
     };
-    fetch();
+    load();
   }, [token]);
 
   useEffect(() => {
@@ -67,13 +61,10 @@ export default function PublicSimulatorPage() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('simulate-chat', {
+      const { data, error } = await supabase.functions.invoke('public-simulator-chat', {
         body: {
+          token,
           messages: [...messages, userMsg],
-          prompt: agent.prompt_compiled,
-          llm_provider: agent.llm_provider,
-          llm_model: agent.llm_model,
-          llm_api_key: agent.llm_api_key,
         },
       });
 
