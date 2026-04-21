@@ -1,0 +1,1 @@
+ALTER TABLE public.agents ADD COLUMN IF NOT EXISTS custom_prompt_enabled boolean NOT NULL DEFAULT false;

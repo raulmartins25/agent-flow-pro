@@ -3,9 +3,11 @@ import { useParams, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Send, RotateCcw, FileText, Share2, CheckCircle2, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Send, RotateCcw, FileText, Share2, CheckCircle2, Loader2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { compileAgentPrompt } from '@/lib/compilePrompt';
 
@@ -22,6 +24,9 @@ export default function SimulatorPage() {
   const [transferred, setTransferred] = useState(false);
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
+  const [editPromptOpen, setEditPromptOpen] = useState(false);
+  const [editedPrompt, setEditedPrompt] = useState('');
+  const [savingPrompt, setSavingPrompt] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -132,7 +137,20 @@ export default function SimulatorPage() {
     setShareToken(token);
     const url = `${window.location.origin}/simulator/share/${token}`;
     await navigator.clipboard.writeText(url);
-    toast.success('Link copiado!');
+  };
+
+  const savePrompt = async () => {
+    if (!id) return;
+    setSavingPrompt(true);
+    const { error } = await supabase
+      .from('agents')
+      .update({ prompt_compiled: editedPrompt, custom_prompt_enabled: true })
+      .eq('id', id);
+    setSavingPrompt(false);
+    if (error) { toast.error(error.message); return; }
+    setAgent({ ...agent, prompt_compiled: editedPrompt, custom_prompt_enabled: true });
+    toast.success('Prompt salvo. Será usado na próxima mensagem.');
+    setEditPromptOpen(false);
   };
 
   if (!agent) {
@@ -160,6 +178,9 @@ export default function SimulatorPage() {
           </Button>
           <Button variant="outline" size="sm" className="w-full justify-start" onClick={() => setShowPrompt(!showPrompt)}>
             <FileText className="mr-2 h-4 w-4" />{showPrompt ? 'Ocultar prompt' : 'Ver prompt'}
+          </Button>
+          <Button variant="outline" size="sm" className="w-full justify-start" onClick={() => { setEditedPrompt(compiledPrompt); setEditPromptOpen(true); }}>
+            <Pencil className="mr-2 h-4 w-4" />Editar prompt (avançado)
           </Button>
           <Button variant="outline" size="sm" className="w-full justify-start" onClick={generateShareLink}>
             <Share2 className="mr-2 h-4 w-4" />Compartilhar
@@ -246,6 +267,30 @@ export default function SimulatorPage() {
           </div>
         </div>
       </div>
+
+      <Dialog open={editPromptOpen} onOpenChange={setEditPromptOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Editar prompt do agente</DialogTitle>
+            <DialogDescription>
+              Recurso avançado. Salvar marca o agente como "prompt customizado" — futuras edições nos campos do wizard não regeneram este texto.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={editedPrompt}
+            onChange={(e) => setEditedPrompt(e.target.value)}
+            rows={20}
+            className="font-mono text-xs"
+          />
+          <p className="text-xs text-muted-foreground">{editedPrompt.length} caracteres</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditPromptOpen(false)}>Cancelar</Button>
+            <Button onClick={savePrompt} disabled={savingPrompt || !editedPrompt.trim()}>
+              {savingPrompt ? 'Salvando...' : 'Salvar prompt'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

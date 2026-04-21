@@ -8,7 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Sparkles, Zap, DollarSign, Smile, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Sparkles, Zap, DollarSign, Smile, CheckCircle2, AlertCircle, ChevronDown, Settings, Wand2 } from 'lucide-react';
+import { compileAgentPrompt } from '@/lib/compilePrompt';
 
 const formatPhone = (digits: string) => {
   if (digits.length <= 2) return digits;
@@ -45,6 +48,12 @@ export function WizardStep6() {
   const needsApiKey = wizardData.llm_provider === 'openai' || wizardData.llm_provider === 'deepseek';
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  const handleGeneratePrompt = () => {
+    const generated = compileAgentPrompt(wizardData as any);
+    updateWizardData({ custom_prompt: generated });
+  };
 
   const insertAtCursor = useCallback((text: string) => {
     const el = textareaRef.current;
@@ -247,6 +256,52 @@ export function WizardStep6() {
           </div>
         )}
       </div>
+
+      {/* Advanced: custom prompt editor */}
+      <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+        <CollapsibleTrigger asChild>
+          <Button variant="outline" className="w-full justify-between">
+            <span className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Avançado: Editar prompt manualmente
+            </span>
+            <ChevronDown className={`h-4 w-4 transition-transform ${advancedOpen ? 'rotate-180' : ''}`} />
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-3 pt-3">
+          <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 flex gap-2">
+            <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+            <p className="text-xs text-foreground">
+              <strong>Recurso avançado.</strong> Editar manualmente desativa a geração automática a partir dos campos do wizard. O texto abaixo será enviado direto para a IA.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="custom-prompt-enabled"
+              checked={wizardData.custom_prompt_enabled}
+              onCheckedChange={(c) => updateWizardData({ custom_prompt_enabled: !!c })}
+            />
+            <Label htmlFor="custom-prompt-enabled" className="cursor-pointer text-sm">
+              Usar prompt customizado ao salvar
+            </Label>
+          </div>
+
+          <Button variant="outline" size="sm" onClick={handleGeneratePrompt}>
+            <Wand2 className="h-4 w-4 mr-1" />
+            Gerar prompt a partir dos campos
+          </Button>
+
+          <Textarea
+            value={wizardData.custom_prompt}
+            onChange={(e) => updateWizardData({ custom_prompt: e.target.value })}
+            rows={20}
+            placeholder='Clique em "Gerar prompt a partir dos campos" para popular este editor, ou escreva seu prompt do zero...'
+            className="font-mono text-xs"
+          />
+          <p className="text-xs text-muted-foreground">{wizardData.custom_prompt.length} caracteres</p>
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 }

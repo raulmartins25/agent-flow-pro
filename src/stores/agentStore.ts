@@ -50,6 +50,9 @@ interface AgentWizardData {
   ecuro_specialty_id: string;
   ecuro_specialty_name: string;
   ecuro_default_duration: number;
+  // Advanced
+  custom_prompt_enabled: boolean;
+  custom_prompt: string;
 }
 
 interface AgentStore {
@@ -99,6 +102,8 @@ const initialWizardData: AgentWizardData = {
   ecuro_specialty_id: '',
   ecuro_specialty_name: '',
   ecuro_default_duration: 30,
+  custom_prompt_enabled: false,
+  custom_prompt: '',
 };
 
 export const useAgentStore = create<AgentStore>((set) => ({

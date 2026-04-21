@@ -50,8 +50,8 @@ export function WizardStep2() {
 
       <div className="space-y-2">
         <Label>Descrição do produto/serviço</Label>
-        <Textarea value={wizardData.product_service_description} onChange={(e) => updateWizardData({ product_service_description: e.target.value })} placeholder="Descreva brevemente o que você oferece..." maxLength={500} rows={3} />
-        <p className="text-xs text-muted-foreground">{wizardData.product_service_description.length}/500</p>
+        <Textarea value={wizardData.product_service_description} onChange={(e) => updateWizardData({ product_service_description: e.target.value })} placeholder="Descreva brevemente o que você oferece..." maxLength={5000} rows={6} />
+        <p className="text-xs text-muted-foreground">{wizardData.product_service_description.length}/5000</p>
       </div>
 
       <div className="space-y-2">

@@ -102,6 +102,8 @@ export default function AgentWizard() {
           ecuro_specialty_id: ecuroCfg.specialty_id || '',
           ecuro_specialty_name: ecuroCfg.specialty_name || '',
           ecuro_default_duration: ecuroCfg.default_duration || 30,
+          custom_prompt_enabled: (agent as any).custom_prompt_enabled ?? false,
+          custom_prompt: agent.prompt_compiled || '',
         }, id);
       } catch (e: any) {
         toast.error(e.message || 'Erro ao carregar agente');
@@ -203,7 +205,9 @@ export default function AgentWizard() {
 
     setSaving(true);
     try {
-      const prompt = compileAgentPrompt(wizardData);
+      const prompt = wizardData.custom_prompt_enabled && wizardData.custom_prompt.trim()
+        ? wizardData.custom_prompt
+        : compileAgentPrompt(wizardData);
 
       if (isEditing) {
         // Update existing agent
@@ -218,6 +222,7 @@ export default function AgentWizard() {
             llm_model: wizardData.llm_model,
             llm_api_key: wizardData.llm_api_key || null,
             prompt_compiled: prompt,
+            custom_prompt_enabled: wizardData.custom_prompt_enabled,
             restrictions: wizardData.ai_restrictions || null,
             transfer_number: wizardData.transfer_number || null,
             transfer_trigger: wizardData.transfer_trigger || null,
@@ -266,6 +271,7 @@ export default function AgentWizard() {
             llm_model: wizardData.llm_model,
             llm_api_key: wizardData.llm_api_key || null,
             prompt_compiled: prompt,
+            custom_prompt_enabled: wizardData.custom_prompt_enabled,
             restrictions: wizardData.ai_restrictions || null,
             transfer_number: wizardData.transfer_number || null,
             transfer_trigger: wizardData.transfer_trigger || null,
