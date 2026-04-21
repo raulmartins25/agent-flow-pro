@@ -1,41 +1,24 @@
 
 
-## Correção: endpoints Ecuro reais
+## Correção: Base URL da Ecuro
 
-A documentação mostra os endpoints corretos. Eu estava chutando — agora tenho os nomes reais.
+### Causa do 404
 
-### Endpoints corretos
-
-| Função | Endpoint atual (errado) | Endpoint correto | Método |
-|---|---|---|---|
-| Listar clínicas | `/list-clinics-webhook` POST | `/list-clinics` | **GET** |
-| Listar especialidades | `/list-specialties-webhook` POST | `/list-specialties` | **GET** (clinicId via query) |
-| Disponibilidade | `/specialty-availability-webhook` POST | `/specialty-availability` | **GET** (clinicId/specialtyId/startDate/endDate via query) |
-| Criar agendamento | `/create-appointment-webhook` POST | `/create-appointment-webhook` | **POST** (já está certo) |
+A base URL correta é `https://clinics.api.dev.ecuro.com.br/api/v1/ecuro-light` (faltava `/ecuro-light` no final). Por isso todas as chamadas GET/POST estavam batendo em rota inexistente.
 
 ### Mudanças
 
-**`supabase/functions/ecuro-list-clinics/index.ts`**
-- Trocar para `GET /list-clinics`, sem body.
-
-**`supabase/functions/ecuro-list-specialties/index.ts`**
-- Trocar para `GET /list-specialties?clinicId=...`, sem body.
-
-**`supabase/functions/ecuro-availability/index.ts`**
-- Trocar para `GET /specialty-availability?clinicId=...&specialtyId=...&startDate=...&endDate=...`, sem body.
-
 **`supabase/functions/_shared/ecuro.ts`**
-- Sem mudança estrutural; ela já aceita qualquer método. Só os callers mudam.
+- Atualizar `getEcuroBase()`:
+  - dev → `https://clinics.api.dev.ecuro.com.br/api/v1/ecuro-light`
+  - prod → `https://clinics.api.ecuro.com.br/api/v1/ecuro-light` (mesmo padrão, assumindo simetria — ajustável depois se prod for diferente)
 
-**`supabase/functions/ecuro-schedule/index.ts`**
-- Mantém `POST /create-appointment-webhook` (já correto).
+Nenhuma outra mudança necessária. Os 4 edge functions (`ecuro-list-clinics`, `ecuro-list-specialties`, `ecuro-availability`, `ecuro-schedule`) já usam os paths corretos da documentação (`/list-clinics`, `/list-specialties`, `/specialty-availability`, `/create-appointment-webhook`) e os métodos certos (GET para os 3 primeiros, POST para o último).
 
 ### Validação após implementar
 
-1. Abrir `/agents/new` → Step 7 → ativar Ecuro → ambiente Dev.
-2. Dropdown "Clínica" deve carregar a lista.
-3. Selecionar clínica → "Especialidade" deve carregar.
-4. Salvar agente.
-
-Se algum endpoint retornar formato inesperado, o `extractList()` no `WizardStep7` já tenta múltiplas chaves (`data`, `items`, `clinics`, etc.), então deve funcionar sem mudança no front.
+1. `/agents/new` → Step 7 → ativar Ecuro → Dev.
+2. Dropdown "Clínica" deve carregar a lista real.
+3. Selecionar clínica → especialidades carregam.
+4. Se prod retornar 404 quando você testar, me avisa o base URL de prod que eu ajusto.
 
