@@ -271,6 +271,7 @@ export default function AgentWizard() {
             llm_model: wizardData.llm_model,
             llm_api_key: wizardData.llm_api_key || null,
             prompt_compiled: prompt,
+            custom_prompt_enabled: wizardData.custom_prompt_enabled,
             restrictions: wizardData.ai_restrictions || null,
             transfer_number: wizardData.transfer_number || null,
             transfer_trigger: wizardData.transfer_trigger || null,
