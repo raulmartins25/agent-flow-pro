@@ -27,6 +27,9 @@ interface AgentData {
   transfer_number: string;
   transfer_trigger: string;
   transfer_summary_template: string;
+  ecuro_enabled?: boolean;
+  ecuro_clinic_name?: string;
+  ecuro_specialty_name?: string;
 }
 
 const toneDescriptions: Record<string, string> = {
@@ -191,5 +194,18 @@ ESTADO DA CONVERSA:
 Você tem acesso ao histórico completo da conversa. Use-o para não repetir perguntas já respondidas e para personalizar suas respostas.
 
 INSTRUÇÃO SOBRE MÍDIA:
-Quando sua resposta contiver o token SEND_MEDIA:{id}, o sistema enviará automaticamente o arquivo correspondente ao lead. O token será removido da mensagem visível. Nunca explique o token ao lead.`;
+Quando sua resposta contiver o token SEND_MEDIA:{id}, o sistema enviará automaticamente o arquivo correspondente ao lead. O token será removido da mensagem visível. Nunca explique o token ao lead.${data.ecuro_enabled ? `
+
+AGENDAMENTO AUTOMATIZADO (ECURO) — REGRAS OBRIGATÓRIAS:
+Você tem acesso a duas ferramentas para agendar consultas na ${data.ecuro_clinic_name || 'clínica'} (${data.ecuro_specialty_name || 'especialidade'}):
+- get_availability: busca horários disponíveis nos próximos 7 dias.
+- schedule_appointment: cria o agendamento depois que o paciente escolhe um horário.
+
+REGRAS:
+1. Quando o paciente concordar em agendar, SEMPRE chame primeiro \`get_availability\` ANTES de propor qualquer horário. NUNCA invente datas ou horários.
+2. Ofereça ao paciente pelo menos 2 dos horários retornados pela ferramenta, em formato amigável.
+3. Quando o paciente confirmar um horário específico, chame \`schedule_appointment\` com o start_time exato (ISO 8601) retornado pela ferramenta, e use nome+telefone que já temos da conversa.
+4. Após o agendamento ser criado com sucesso, confirme ao paciente com data, horário e clínica. Em seguida emita TRANSFER_LEAD para notificar a equipe.
+5. Em caso de erro da ferramenta (sem horários, falha de API), peça desculpas e emita TRANSFER_LEAD para humano resolver.
+6. NUNCA peça ao paciente para confirmar a clínica ou especialidade — já estão fixadas.` : ''}`;
 }
