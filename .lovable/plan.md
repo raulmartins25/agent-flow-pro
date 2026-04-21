@@ -1,47 +1,40 @@
 
 
-## Ajuste: Seleção de clínica + especialidade no Wizard
+## Plano: Pré-preencher rascunho do agente "Eva" (Clínica Odontológica)
 
-### Mudança no plano original
+### O que vou fazer
 
-A integração Ecuro já previa selecionar `clinic_id` e `specialty_id` na UI, mas vou deixar explícito como funciona quando há **múltiplas clínicas**.
+Adicionar um botão **"Carregar rascunho odontológico"** no topo do Wizard (`/agents/new`) que preenche automaticamente todos os 7 steps com a configuração da Eva odontológica que você me passou. Você só ajusta o que precisar (nome da clínica real, número de transferência, dispositivo, clínica/especialidade Ecuro) e salva.
 
-### UI no Wizard (novo Step 7 "Integrações" ou card no Step 6)
+### Conteúdo pré-preenchido
 
-**Card "Agendamento Ecuro"**
-1. **Switch** "Ativar agendamento via Ecuro"
-2. Ao ativar, chama `ecuro-list-clinics` (edge function proxy) e popula:
-   - **Select de clínica** (obrigatório) — lista todas as clínicas retornadas pela API com nome + cidade/identificador para diferenciar
-3. Ao escolher clínica, chama `ecuro-list-specialties?clinicId=...` e popula:
-   - **Select de especialidade default** (obrigatório) — ex: "Implantodontia", "Avaliação"
-4. **Input duração** (minutos, default 30)
+**Step 1** — Tipo: Receptivo, Nome: `Eva - Clínica Odontológica` (você troca pelo nome real). Dispositivo: vazio (você seleciona).
 
-Tudo é salvo em `agent_integrations.config`:
-```json
-{
-  "clinic_id": "uuid-da-clinica-escolhida",
-  "clinic_name": "Unidade Centro",
-  "specialty_id": "uuid-especialidade",
-  "specialty_name": "Avaliação",
-  "default_duration": 30
-}
-```
+**Step 2** — Persona: `Eva`, Empresa: `[Nome da Clínica]` (você edita), Segmento: `Odontologia`, Tom: Semi-formal, Descrição: especialidades completas (implante protocolo/zigomático, ortodontia, estética, odontopediatria, avaliação gratuita com exame, anestesia geral), Restrições: bloco completo de regras de comportamento que você passou (fluxo, agendamento via Ecuro, recusa, cancelamento, valores, descontos, planos, aposentados, odontopediatria, acompanhante, identidade, anti-duplicação).
 
-### Como a IA usa em runtime
+**Step 3** — Mensagem de boas-vindas pronta com `{{nome_contato}}`.
 
-As tools `get_availability` e `schedule_appointment` no `process-message` leem `agent_integrations.config` do agente e injetam **automaticamente** `clinic_id` + `specialty_id` nas chamadas Ecuro. A IA **não escolhe clínica** — é fixa por agente.
+**Step 4** — 4 perguntas de qualificação (procura/tempo/dor/impacto social), sem mídia.
 
-### Recomendação para múltiplas clínicas
+**Step 5** — 4 objeções pré-configuradas ("tá caro", "quero saber preço antes", "não posso ir agora", "quero cancelar"). Followup: ativo, msg 3, máx 3, intervalo 120min. Anti-ban padrão.
 
-**1 agente = 1 clínica.** Se a clínica Eva tem 3 unidades, você cria 3 agentes (Eva-Centro, Eva-Norte, Eva-Sul), cada um com seu próprio dispositivo WhatsApp e sua própria `clinic_id` configurada. Isso é mais limpo que tentar a IA decidir a unidade no meio da conversa.
+**Step 6** — Trigger: `after_all_questions`. Template de resumo com nome/telefone/respostas. LLM: Claude Sonnet (Lovable AI Gateway).
 
-Se quiser **1 agente atendendo múltiplas clínicas** (ex: lead escolhe a unidade na conversa), me avise — exige mudar a tool `get_availability` para aceitar `clinic_id` como parâmetro e adicionar uma tool `list_clinics` para a IA oferecer opções ao lead. Mais complexo e propenso a erro.
+**Step 7** — Ecuro: ativado, ambiente Dev. Clínica e especialidade em branco (você seleciona após carregar).
 
-### Resto do plano sem alteração
+### Como funciona
 
-Migration `agent_integrations`, secret `ECURO_API_TOKEN`, edge functions (`ecuro-list-clinics`, `ecuro-list-specialties`, `ecuro-availability`, `ecuro-schedule`) e tool calling no `process-message` permanecem iguais.
+- Botão aparece **apenas em `/agents/new`** (não em edição), no topo do wizard
+- Texto: "Carregar rascunho: Clínica Odontológica"
+- Ao clicar: preenche `wizardData` via `updateWizardData()` e mostra toast "Rascunho carregado — revise e ajuste"
+- Você navega pelos steps, ajusta o que precisar, e clica "Criar agente" no final
 
-### Pergunta antes de implementar
+### Arquivos modificados
 
-Confirma o modelo **1 agente por clínica** (recomendado) ou quer **1 agente multi-clínica** com o lead escolhendo a unidade?
+- `src/lib/draftTemplates.ts` (novo) — exporta `dentalClinicDraft: Partial<AgentWizardData>` com toda a configuração
+- `src/pages/AgentWizard.tsx` — adiciona botão de carregar rascunho (só visível em modo criação)
+
+### Após aprovação
+
+Implemento, você abre `/agents/new`, clica no botão, ajusta nome da clínica + dispositivo + clínica/especialidade Ecuro no Step 7, e salva. Pronto.
 
