@@ -22,7 +22,8 @@ const llmOptions = [
   { provider: 'claude' as const, model: 'claude-haiku-4-5-20251001', name: 'Claude Haiku', desc: 'Rápido e econômico', speed: '⚡⚡⚡', quality: '⭐⭐⭐⭐', cost: '$' },
   { provider: 'openai' as const, model: 'gpt-4o', name: 'GPT-4o', desc: 'OpenAI — chave API necessária', speed: '⚡⚡', quality: '⭐⭐⭐⭐⭐', cost: '$$' },
   { provider: 'openai' as const, model: 'gpt-4o-mini', name: 'GPT-4o Mini', desc: 'Mais econômico com OpenAI', speed: '⚡⚡⚡', quality: '⭐⭐⭐⭐', cost: '$' },
-  { provider: 'deepseek' as const, model: 'deepseek-v3', name: 'DeepSeek V3', desc: 'Chave API DeepSeek', speed: '⚡⚡', quality: '⭐⭐⭐⭐', cost: '$' },
+  { provider: 'deepseek' as const, model: 'deepseek-chat', name: 'DeepSeek V3 (Chat)', desc: 'Chave API DeepSeek', speed: '⚡⚡', quality: '⭐⭐⭐⭐', cost: '$' },
+  { provider: 'deepseek' as const, model: 'deepseek-reasoner', name: 'DeepSeek R1 (Reasoner)', desc: 'Raciocínio profundo — DeepSeek', speed: '⚡', quality: '⭐⭐⭐⭐⭐', cost: '$$' },
 ];
 
 const standardVars = [

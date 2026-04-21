@@ -77,8 +77,23 @@ export default function PublicSimulatorPage() {
         },
       });
 
-      if (error) throw error;
-      setMessages(prev => [...prev, { role: 'assistant', content: data?.response || '...' }]);
+      if (error) {
+        const msg = (data as any)?.error || error.message || 'Erro desconhecido';
+        toast.error(msg);
+        setLoading(false);
+        return;
+      }
+      if ((data as any)?.error) {
+        toast.error((data as any).error);
+        setLoading(false);
+        return;
+      }
+      if (!data?.response) {
+        toast.error('Resposta vazia do agente');
+        setLoading(false);
+        return;
+      }
+      setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
 
       if (config?.qualification_questions) {
         const qCount = (config.qualification_questions as any[]).length;

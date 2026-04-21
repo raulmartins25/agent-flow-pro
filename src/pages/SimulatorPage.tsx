@@ -74,8 +74,23 @@ export default function SimulatorPage() {
         },
       });
 
-      if (error) throw error;
-      const aiResponse = data?.response || 'Desculpe, não consegui processar sua mensagem.';
+      if (error) {
+        const msg = (data as any)?.error || error.message || 'Erro desconhecido';
+        toast.error(msg);
+        setLoading(false);
+        return;
+      }
+      if ((data as any)?.error) {
+        toast.error((data as any).error);
+        setLoading(false);
+        return;
+      }
+      const aiResponse = data?.response;
+      if (!aiResponse) {
+        toast.error('Resposta vazia do agente');
+        setLoading(false);
+        return;
+      }
       setMessages(prev => [...prev, { role: 'assistant', content: aiResponse }]);
 
       // Check for transfer trigger
