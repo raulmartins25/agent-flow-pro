@@ -193,6 +193,44 @@ serve(async (req) => {
       });
     }
 
+    // --- APPOINTMENT REMINDER REPLY DETECTION ---
+    let appointmentContext = "";
+    {
+      const { data: pendingAppts } = await supabase
+        .from("appointments")
+        .select("*")
+        .eq("conversation_id", conversation_id)
+        .eq("status", "scheduled")
+        .gt("start_time", new Date().toISOString())
+        .or("reminder_24h_status.eq.sent,reminder_2h_status.eq.sent")
+        .order("start_time", { ascending: true })
+        .limit(1);
+
+      const appt = pendingAppts?.[0];
+      if (appt && msgLower) {
+        const confirmWords = ["sim", "confirmo", "confirmado", "confirmada", "ok", "okay", "estarei", "vou sim", "pode confirmar", "ta", "tá", "combinado", "perfeito", "claro", "positivo", "afirmativo", "blz", "beleza"];
+        const cancelWords = ["nao posso", "nao vou", "nao consigo", "remarcar", "cancelar", "cancela", "desmarcar", "preciso remarcar", "outro dia", "outro horario"];
+
+        const isConfirm = confirmWords.some(w => msgLower === w || msgLower.startsWith(w + " ") || msgLower.endsWith(" " + w) || msgLower.includes(" " + w + " "));
+        const isCancel = cancelWords.some(w => msgLower.includes(w));
+
+        if (isCancel) {
+          await supabase.from("appointments").update({ status: "cancelled" }).eq("id", appt.id);
+          appointmentContext = `\n\nCONTEXTO CRÍTICO: O paciente pediu para CANCELAR/REMARCAR o agendamento. Reconheça com empatia, informe que vai passar para a equipe ajustar e emita TRANSFER_LEAD.`;
+        } else if (isConfirm) {
+          const via = appt.reminder_2h_status === "sent" ? "2h" : "24h";
+          await supabase.from("appointments").update({
+            status: "confirmed",
+            confirmed_at: new Date().toISOString(),
+            confirmed_via: via,
+            reminder_24h_status: appt.reminder_24h_status === "pending" ? "skipped" : appt.reminder_24h_status,
+            reminder_2h_status: appt.reminder_2h_status === "pending" ? "skipped" : appt.reminder_2h_status,
+          }).eq("id", appt.id);
+          appointmentContext = `\n\nCONTEXTO CRÍTICO: O paciente CONFIRMOU presença no agendamento. Agradeça brevemente, deseje uma boa consulta e encerre. NÃO faça mais perguntas.`;
+        }
+      }
+    }
+
     // --- BAN TRIGGERS (aggressive opt-out) ---
     if (lastUserMsg?.content && agentFull?.restrictions) {
       const banTriggers = ["para", "stop", "me tira", "denuncia", "spam", "me bloqueia"];
@@ -238,6 +276,7 @@ serve(async (req) => {
       : `\n\nINFORMAÇÃO DO CONTATO:\nO nome do contato não está disponível. NÃO faça perguntas para descobrir o nome — não é necessário para a qualificação.`;
 
     systemPrompt += nameInstruction;
+    if (appointmentContext) systemPrompt += appointmentContext;
 
     if (agentFull?.type === "prospecting") {
       const userMessages = history.filter((m: any) => m.role === "user");

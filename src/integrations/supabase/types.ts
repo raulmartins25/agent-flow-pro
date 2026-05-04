@@ -191,6 +191,78 @@ export type Database = {
           },
         ]
       }
+      appointments: {
+        Row: {
+          agent_id: string
+          clinic_name: string | null
+          confirmed_at: string | null
+          confirmed_via: string | null
+          contact_name: string | null
+          contact_number: string
+          conversation_id: string | null
+          created_at: string
+          device_id: string | null
+          end_time: string | null
+          external_id: string | null
+          id: string
+          reminder_24h_sent_at: string | null
+          reminder_24h_status: Database["public"]["Enums"]["reminder_status"]
+          reminder_2h_sent_at: string | null
+          reminder_2h_status: Database["public"]["Enums"]["reminder_status"]
+          specialty_name: string | null
+          start_time: string
+          status: Database["public"]["Enums"]["appointment_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          clinic_name?: string | null
+          confirmed_at?: string | null
+          confirmed_via?: string | null
+          contact_name?: string | null
+          contact_number: string
+          conversation_id?: string | null
+          created_at?: string
+          device_id?: string | null
+          end_time?: string | null
+          external_id?: string | null
+          id?: string
+          reminder_24h_sent_at?: string | null
+          reminder_24h_status?: Database["public"]["Enums"]["reminder_status"]
+          reminder_2h_sent_at?: string | null
+          reminder_2h_status?: Database["public"]["Enums"]["reminder_status"]
+          specialty_name?: string | null
+          start_time: string
+          status?: Database["public"]["Enums"]["appointment_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          clinic_name?: string | null
+          confirmed_at?: string | null
+          confirmed_via?: string | null
+          contact_name?: string | null
+          contact_number?: string
+          conversation_id?: string | null
+          created_at?: string
+          device_id?: string | null
+          end_time?: string | null
+          external_id?: string | null
+          id?: string
+          reminder_24h_sent_at?: string | null
+          reminder_24h_status?: Database["public"]["Enums"]["reminder_status"]
+          reminder_2h_sent_at?: string | null
+          reminder_2h_status?: Database["public"]["Enums"]["reminder_status"]
+          specialty_name?: string | null
+          start_time?: string
+          status?: Database["public"]["Enums"]["appointment_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       blacklist: {
         Row: {
           created_at: string | null
@@ -602,6 +674,7 @@ export type Database = {
       agent_status: "active" | "paused" | "inactive"
       agent_type: "receptive" | "prospecting"
       app_role: "admin" | "moderator" | "user"
+      appointment_status: "scheduled" | "confirmed" | "cancelled" | "completed"
       campaign_status: "pending" | "running" | "paused" | "completed" | "error"
       contact_status: "pending" | "sent" | "error" | "replied"
       conversation_status: "active" | "paused" | "transferred" | "closed"
@@ -610,6 +683,7 @@ export type Database = {
       media_type: "image" | "audio" | "document" | "video"
       message_role: "user" | "assistant" | "system"
       plan_type: "free" | "pro" | "enterprise"
+      reminder_status: "pending" | "sent" | "confirmed" | "skipped"
       tone_type: "formal" | "semi-formal" | "casual"
     }
     CompositeTypes: {
@@ -741,6 +815,7 @@ export const Constants = {
       agent_status: ["active", "paused", "inactive"],
       agent_type: ["receptive", "prospecting"],
       app_role: ["admin", "moderator", "user"],
+      appointment_status: ["scheduled", "confirmed", "cancelled", "completed"],
       campaign_status: ["pending", "running", "paused", "completed", "error"],
       contact_status: ["pending", "sent", "error", "replied"],
       conversation_status: ["active", "paused", "transferred", "closed"],
@@ -749,6 +824,7 @@ export const Constants = {
       media_type: ["image", "audio", "document", "video"],
       message_role: ["user", "assistant", "system"],
       plan_type: ["free", "pro", "enterprise"],
+      reminder_status: ["pending", "sent", "confirmed", "skipped"],
       tone_type: ["formal", "semi-formal", "casual"],
     },
   },
