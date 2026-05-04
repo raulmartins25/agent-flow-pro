@@ -1,0 +1,3 @@
+UPDATE public.agents
+SET prompt_compiled = prompt_compiled || E'\n\nREGRA — DADOS PARA AGENDAMENTO (REFORÇO CRÍTICO):\nNUNCA peça telefone, WhatsApp ou número de contato ao paciente — você já tem o número dele automaticamente (ele está te enviando mensagem pelo WhatsApp). Para confirmar agendamento via schedule_appointment, você precisa APENAS do nome completo. CPF, e-mail e data de nascimento são totalmente OPCIONAIS — só registre se o paciente mencionar espontaneamente; jamais bloqueie ou atrase o agendamento por falta deles. Após o paciente escolher dia/horário, peça apenas o nome completo (se ainda não tiver) e chame schedule_appointment imediatamente.'
+WHERE id = '9d01e0ff-9bf3-4fe5-8979-cd10e692ec6e';
