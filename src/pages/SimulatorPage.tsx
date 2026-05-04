@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Send, RotateCcw, FileText, Share2, CheckCircle2, Loader2, Pencil } from 'lucide-react';
+import { Send, RotateCcw, FileText, Share2, CheckCircle2, Loader2, Pencil, Calendar, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { compileAgentPrompt } from '@/lib/compilePrompt';
 
@@ -27,6 +27,8 @@ export default function SimulatorPage() {
   const [editPromptOpen, setEditPromptOpen] = useState(false);
   const [editedPrompt, setEditedPrompt] = useState('');
   const [savingPrompt, setSavingPrompt] = useState(false);
+  const [simulationMode, setSimulationMode] = useState<'off' | 'dryrun' | 'real'>('dryrun');
+  const [toolLog, setToolLog] = useState<Array<{ name: string; mode: string; args: any; result: any }>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -76,6 +78,8 @@ export default function SimulatorPage() {
           llm_provider: agent.llm_provider,
           llm_model: agent.llm_model,
           llm_api_key: agent.llm_api_key,
+          agent_id: id,
+          simulation_mode: simulationMode,
         },
       });
 
@@ -97,6 +101,15 @@ export default function SimulatorPage() {
         return;
       }
       setMessages(prev => [...prev, { role: 'assistant', content: aiResponse }]);
+      if (Array.isArray((data as any)?.tool_log) && (data as any).tool_log.length > 0) {
+        setToolLog(prev => [...prev, ...(data as any).tool_log]);
+        const sched = (data as any).tool_log.find((t: any) => t.name === 'schedule_appointment');
+        if (sched) {
+          if (sched.result?.dryrun) toast.info('🧪 schedule_appointment chamado em DRY-RUN — nada criado na Ecuro.');
+          else if (sched.result?.ok || sched.result?.appointment_id || sched.result?.id) toast.success('✅ Agendamento REAL criado na Ecuro!');
+          else toast.error('❌ schedule_appointment falhou: ' + JSON.stringify(sched.result).slice(0, 200));
+        }
+      }
 
       // Check for transfer trigger
       if (config?.qualification_questions) {
@@ -115,6 +128,7 @@ export default function SimulatorPage() {
   const resetChat = () => {
     setMessages([]);
     setTransferred(false);
+    setToolLog([]);
     if (config) {
       const welcomeMsg = agent?.type === 'receptive'
         ? (config.welcome_message || 'Olá!')
@@ -193,6 +207,52 @@ export default function SimulatorPage() {
               <p className="text-xs text-muted-foreground break-all">
                 {window.location.origin}/simulator/share/{shareToken}
               </p>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> Modo de simulação</CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 pt-0 space-y-1">
+            {([
+              { v: 'off', label: 'Desligado', desc: 'Sem tools (chat puro)' },
+              { v: 'dryrun', label: 'Dry-run', desc: 'Lista horários reais, NÃO agenda' },
+              { v: 'real', label: '⚠️ Real', desc: 'CRIA agendamento de verdade' },
+            ] as const).map(opt => (
+              <button
+                key={opt.v}
+                onClick={() => setSimulationMode(opt.v)}
+                className={`w-full text-left text-xs rounded px-2 py-1.5 border ${
+                  simulationMode === opt.v ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'
+                }`}
+              >
+                <div className="font-medium">{opt.label}</div>
+                <div className="text-muted-foreground text-[10px]">{opt.desc}</div>
+              </button>
+            ))}
+            {simulationMode === 'real' && (
+              <div className="flex gap-1 items-start text-[10px] text-destructive mt-2">
+                <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                <span>Cada agendamento bem-sucedido cria slot real na agenda.</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {toolLog.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs">🔧 Tool calls ({toolLog.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 pt-0 space-y-2 max-h-60 overflow-y-auto">
+              {toolLog.map((t, i) => (
+                <div key={i} className="text-[10px] border-l-2 border-primary/40 pl-2">
+                  <div className="font-mono font-semibold">{t.name} <span className="text-muted-foreground">[{t.mode}]</span></div>
+                  <pre className="whitespace-pre-wrap text-muted-foreground">{JSON.stringify(t.result, null, 2).slice(0, 300)}</pre>
+                </div>
+              ))}
             </CardContent>
           </Card>
         )}
