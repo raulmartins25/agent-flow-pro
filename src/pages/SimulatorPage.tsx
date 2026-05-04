@@ -101,6 +101,15 @@ export default function SimulatorPage() {
         return;
       }
       setMessages(prev => [...prev, { role: 'assistant', content: aiResponse }]);
+      if (Array.isArray((data as any)?.tool_log) && (data as any).tool_log.length > 0) {
+        setToolLog(prev => [...prev, ...(data as any).tool_log]);
+        const sched = (data as any).tool_log.find((t: any) => t.name === 'schedule_appointment');
+        if (sched) {
+          if (sched.result?.dryrun) toast.info('🧪 schedule_appointment chamado em DRY-RUN — nada criado na Ecuro.');
+          else if (sched.result?.ok || sched.result?.appointment_id || sched.result?.id) toast.success('✅ Agendamento REAL criado na Ecuro!');
+          else toast.error('❌ schedule_appointment falhou: ' + JSON.stringify(sched.result).slice(0, 200));
+        }
+      }
 
       // Check for transfer trigger
       if (config?.qualification_questions) {
