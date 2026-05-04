@@ -86,6 +86,42 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Persist appointment for reminder system
+    if (res.ok) {
+      try {
+        const { data: agentRow } = await supabase
+          .from('agents').select('user_id').eq('id', agent_id).maybeSingle();
+        let convDeviceId: string | null = null;
+        let convContactName: string | null = null;
+        if (conversation_id) {
+          const { data: convRow } = await supabase
+            .from('conversations').select('device_id, contact_name')
+            .eq('id', conversation_id).maybeSingle();
+          convDeviceId = convRow?.device_id || null;
+          convContactName = convRow?.contact_name || null;
+        }
+        const cfgAny = cfg as any;
+        const externalId = (data && typeof data === 'object')
+          ? (data.id || data.appointmentId || data.appointment_id || null)
+          : null;
+        await supabase.from('appointments').insert({
+          user_id: agentRow?.user_id,
+          agent_id,
+          conversation_id: conversation_id || null,
+          device_id: convDeviceId,
+          contact_number: patient_phone,
+          contact_name: patient_name || convContactName,
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+          clinic_name: cfgAny.clinic_name || null,
+          specialty_name: cfgAny.specialty_name || null,
+          external_id: externalId ? String(externalId) : null,
+        });
+      } catch (insErr) {
+        console.error('appointments insert failed', insErr);
+      }
+    }
+
     if (!res.ok) {
       return new Response(JSON.stringify({ success: false, error: 'Ecuro schedule failed', status: res.status, body: data }), {
         status: res.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
