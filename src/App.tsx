@@ -23,6 +23,7 @@ import DevicesPage from "@/pages/DevicesPage";
 import LogsPage from "@/pages/LogsPage";
 import TransfersPage from "@/pages/TransfersPage";
 import ProspectingPage from "@/pages/ProspectingPage";
+import AppointmentsPage from "@/pages/AppointmentsPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -52,6 +53,7 @@ const App = () => (
               <Route path="/blasts/new" element={<NewBlastPage />} />
               <Route path="/blasts/:id" element={<BlastDetailPage />} />
               <Route path="/transfers" element={<TransfersPage />} />
+              <Route path="/appointments" element={<AppointmentsPage />} />
               <Route path="/prospecting" element={<ProspectingPage />} />
               <Route path="/warmup" element={<ChipWarmupPage />} />
               <Route path="/logs" element={<LogsPage />} />
