@@ -27,6 +27,8 @@ export default function SimulatorPage() {
   const [editPromptOpen, setEditPromptOpen] = useState(false);
   const [editedPrompt, setEditedPrompt] = useState('');
   const [savingPrompt, setSavingPrompt] = useState(false);
+  const [simulationMode, setSimulationMode] = useState<'off' | 'dryrun' | 'real'>('dryrun');
+  const [toolLog, setToolLog] = useState<Array<{ name: string; mode: string; args: any; result: any }>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
