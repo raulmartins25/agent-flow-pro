@@ -73,15 +73,40 @@ Deno.serve(async (req) => {
     }
 
     // Normalize into list of slots
+    // Ecuro real shape: { data: { dates: [{ date: "YYYY-MM-DD", day, hours: [{ start: "HH:MM BRT", end: "HH:MM BRT" }] }] } }
     const slots: Array<{ start: string; end: string; label: string }> = [];
-    const list = Array.isArray(data) ? data : (data?.slots || data?.availability || []);
-    for (const s of list) {
-      const start = s.start || s.startTime || s.start_time;
-      const end = s.end || s.endTime || s.end_time;
-      if (start) slots.push({ start, end: end || start, label: fmtPtBr(start) });
+
+    function timeToIso(date: string, hhmmTz: string): string {
+      // "08:00 BRT" + "2026-05-04" → "2026-05-04T08:00:00-03:00"
+      const m = String(hhmmTz).match(/(\d{1,2}):(\d{2})/);
+      if (!m) return `${date}T00:00:00-03:00`;
+      const hh = m[1].padStart(2, '0');
+      return `${date}T${hh}:${m[2]}:00-03:00`;
     }
 
-    return new Response(JSON.stringify({ slots: slots.slice(0, 20), raw: data }), {
+    const dates = data?.data?.dates || data?.dates;
+    if (Array.isArray(dates)) {
+      for (const d of dates) {
+        const date = d.date;
+        const hours = d.hours || [];
+        for (const h of hours) {
+          if (!h.start || !date) continue;
+          const startIso = timeToIso(date, h.start);
+          const endIso = h.end ? timeToIso(date, h.end) : startIso;
+          slots.push({ start: startIso, end: endIso, label: fmtPtBr(startIso) });
+        }
+      }
+    } else {
+      // Fallback to flat shapes
+      const list = Array.isArray(data) ? data : (data?.slots || data?.availability || []);
+      for (const s of list) {
+        const start = s.start || s.startTime || s.start_time;
+        const end = s.end || s.endTime || s.end_time;
+        if (start) slots.push({ start, end: end || start, label: fmtPtBr(start) });
+      }
+    }
+
+    return new Response(JSON.stringify({ slots: slots.slice(0, 50), total_available: slots.length, raw: data }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e) {
