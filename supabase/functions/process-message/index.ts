@@ -276,6 +276,7 @@ serve(async (req) => {
       : `\n\nINFORMAÇÃO DO CONTATO:\nO nome do contato não está disponível. NÃO faça perguntas para descobrir o nome — não é necessário para a qualificação.`;
 
     systemPrompt += nameInstruction;
+    if (appointmentContext) systemPrompt += appointmentContext;
 
     if (agentFull?.type === "prospecting") {
       const userMessages = history.filter((m: any) => m.role === "user");
