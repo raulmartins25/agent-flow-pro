@@ -78,6 +78,8 @@ export default function SimulatorPage() {
           llm_provider: agent.llm_provider,
           llm_model: agent.llm_model,
           llm_api_key: agent.llm_api_key,
+          agent_id: id,
+          simulation_mode: simulationMode,
         },
       });
 
