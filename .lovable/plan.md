@@ -1,49 +1,37 @@
-## Ajustar abordagem da Jordana — oferta exclusiva no momento certo
+## Resposta curta
 
-### O que muda
+**Sim**, em produção o telefone já vem do WhatsApp via webhook da Evolution API e é injetado automaticamente no `schedule_appointment` (linha 325 do `process-message`). O agente **não precisa perguntar**.
 
-**1. Mensagem de boas-vindas (welcome_message)**
+O que está acontecendo: o **prompt da Jordana** ainda diz "use nome+telefone que já temos da conversa", mas não proíbe explicitamente de pedir telefone. Os LLMs (DeepSeek/GPT) acabam pedindo por costume/educação, principalmente no simulador onde o `contact_number` é fake.
 
-Remover a menção a "avaliação gratuita" logo na primeira mensagem. Nova versão:
+## O que fazer
 
-```
-Olá {{nome_contato}}! 👋 Aqui é a Jordana, da {{empresa}}. Que bom ter você por aqui!
+### 1. Ajustar regras de agendamento no prompt (`src/lib/compilePrompt.ts`)
 
-Me conta, o que te trouxe até a gente hoje? Está com algum incômodo específico ou quer cuidar do seu sorriso de forma geral? 😊
-```
+Trocar a regra atual por uma versão explícita:
 
-A pergunta "qual seu nome" sai daqui (o WhatsApp já traz o nome) e dá lugar ao acolhimento + descoberta da dor.
+- **Regra 4 (nova):** NUNCA pedir telefone/WhatsApp — o sistema já tem o número (paciente está no WhatsApp). Pedir apenas **nome completo** se ainda não souber. CPF/email/data de nascimento são **opcionais**: só usar se o paciente oferecer; não bloquear agendamento por falta deles.
 
-**2. Regra no prompt (ai_restrictions / prompt customizado)**
+### 2. Garantir telefone no simulador também
 
-Adicionar bloco de instruções de venda consultiva que será incorporado ao prompt compilado:
+No `simulate-chat`, o `runTool` já passa `patient_phone: args.patient_phone || "5500000000000"` como fallback. Vou confirmar que esse fallback continua suficiente para teste em modo dry-run e real (em real ele cria agendamento de teste com esse número placeholder — aceitável para validação).
 
-```
-ABORDAGEM DE OFERTA (IMPORTANTE):
-- NUNCA mencione avaliação gratuita, desconto ou promoção na primeira mensagem.
-- Primeiro entenda: qual a queixa/necessidade do lead, há quanto tempo, se já fez tratamento antes.
-- Só DEPOIS de entender a dor (mínimo 2 trocas de mensagem), apresente a oferta exclusiva
-  com gatilho de escassez real:
+### 3. (Opcional) Reforçar no schema da tool
 
-  "Olha, {{nome}}, tenho uma boa notícia: essa semana abrimos 5 vagas de avaliação
-  sem custo (com exame de imagem incluso) e já fechamos 3. Posso reservar uma das
-  2 vagas restantes pra você?"
+No `ECURO_TOOLS` do `simulate-chat`, remover `patient_phone` da descrição da função para o LLM não ser tentado a coletar. Em produção (`process-message`) verificar se a tool definition expõe `patient_phone` — se sim, remover de lá também já que é injetado server-side.
 
-- Se o lead já demonstrou alta intenção (ex: "quero agendar", "quanto custa"),
-  pode adiantar a oferta logo após confirmar a necessidade.
-- Mantenha o tom consultivo, não vendedor. A escassez é real — não force urgência falsa
-  além do script acima.
-```
+## Arquivos a editar
 
-### Onde aplicar
+- `src/lib/compilePrompt.ts` — atualizar bloco AGENDAMENTO AUTOMATIZADO (linhas 199–210)
+- `supabase/functions/process-message/index.ts` — confirmar que tool schema do `schedule_appointment` não pede `patient_phone` ao LLM (vou inspecionar antes de mexer)
 
-- Atualizar `agent_config.welcome_message` do agente Jordana (id `9d01e0ff-...`) via migration.
-- Atualizar `agent_config.ai_restrictions` adicionando o bloco de "abordagem de oferta" ao texto existente.
-- Recompilar `agents.prompt_compiled` rodando `compileAgentPrompt` com os novos dados (via migration SQL direta — concatenando o bloco no prompt atual), para que o efeito seja imediato sem precisar reabrir o wizard.
+## Efeito esperado
 
-### Validação
+Jordana, após paciente escolher horário, dirá algo como:
+> "Perfeito! Pra finalizar, me confirma seu nome completo? 😊"
 
-1. Abrir link público do simulador da Jordana em aba anônima.
-2. Primeira mensagem da Jordana NÃO deve mencionar "avaliação gratuita".
-3. Responder algo genérico ("boa tarde", "quais procedimentos") → ela pergunta sobre a necessidade.
-4. Após contar a dor → ela apresenta as "5 vagas, 3 já fechadas".
+E chamará `schedule_appointment` direto, sem pedir telefone.
+
+## Observação importante
+
+Agentes existentes (incluindo Jordana) têm o `prompt_compiled` salvo no banco. Após a mudança no template, será necessário **recompilar o prompt** desses agentes (re-salvar pelo wizard ou rodar um update). Posso incluir um pequeno script de recompilação no mesmo passo se você quiser.
