@@ -211,6 +211,52 @@ export default function SimulatorPage() {
           </Card>
         )}
 
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> Modo de simulação</CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 pt-0 space-y-1">
+            {([
+              { v: 'off', label: 'Desligado', desc: 'Sem tools (chat puro)' },
+              { v: 'dryrun', label: 'Dry-run', desc: 'Lista horários reais, NÃO agenda' },
+              { v: 'real', label: '⚠️ Real', desc: 'CRIA agendamento de verdade' },
+            ] as const).map(opt => (
+              <button
+                key={opt.v}
+                onClick={() => setSimulationMode(opt.v)}
+                className={`w-full text-left text-xs rounded px-2 py-1.5 border ${
+                  simulationMode === opt.v ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'
+                }`}
+              >
+                <div className="font-medium">{opt.label}</div>
+                <div className="text-muted-foreground text-[10px]">{opt.desc}</div>
+              </button>
+            ))}
+            {simulationMode === 'real' && (
+              <div className="flex gap-1 items-start text-[10px] text-destructive mt-2">
+                <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                <span>Cada agendamento bem-sucedido cria slot real na agenda.</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {toolLog.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs">🔧 Tool calls ({toolLog.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 pt-0 space-y-2 max-h-60 overflow-y-auto">
+              {toolLog.map((t, i) => (
+                <div key={i} className="text-[10px] border-l-2 border-primary/40 pl-2">
+                  <div className="font-mono font-semibold">{t.name} <span className="text-muted-foreground">[{t.mode}]</span></div>
+                  <pre className="whitespace-pre-wrap text-muted-foreground">{JSON.stringify(t.result, null, 2).slice(0, 300)}</pre>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
         {config?.qualification_questions && (
           <Card>
             <CardHeader className="pb-2">
