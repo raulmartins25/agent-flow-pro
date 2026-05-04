@@ -128,6 +128,7 @@ export default function SimulatorPage() {
   const resetChat = () => {
     setMessages([]);
     setTransferred(false);
+    setToolLog([]);
     if (config) {
       const welcomeMsg = agent?.type === 'receptive'
         ? (config.welcome_message || 'Olá!')
