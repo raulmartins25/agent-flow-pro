@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Send, RotateCcw, FileText, Share2, CheckCircle2, Loader2, Pencil } from 'lucide-react';
+import { Send, RotateCcw, FileText, Share2, CheckCircle2, Loader2, Pencil, Calendar, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { compileAgentPrompt } from '@/lib/compilePrompt';
 
