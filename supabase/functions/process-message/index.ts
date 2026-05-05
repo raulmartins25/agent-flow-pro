@@ -407,13 +407,32 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
         break;
       }
     } else if (agent.llm_provider === "openai") {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${agent.llm_api_key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: agent.llm_model || "gpt-4o", messages }),
-      });
-      const data = await res.json();
-      aiResponse = data.choices?.[0]?.message?.content || "";
+      const conv = [...messages];
+      for (let iter = 0; iter < 4; iter++) {
+        const body: any = { model: agent.llm_model || "gpt-4o", messages: conv };
+        if (ecuroTools) { body.tools = ecuroTools; body.tool_choice = "auto"; }
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${agent.llm_api_key}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        const choice = data.choices?.[0]?.message;
+        const toolCalls = choice?.tool_calls;
+        if (toolCalls && toolCalls.length > 0) {
+          conv.push({ role: "assistant", content: choice.content || "", tool_calls: toolCalls } as any);
+          for (const tc of toolCalls) {
+            let parsedArgs: any = {};
+            try { parsedArgs = JSON.parse(tc.function?.arguments || "{}"); } catch {}
+            const toolResult = await runEcuroTool(tc.function?.name, parsedArgs);
+            console.log(`Ecuro tool ${tc.function?.name} →`, JSON.stringify(toolResult).substring(0, 300));
+            conv.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(toolResult) } as any);
+          }
+          continue;
+        }
+        aiResponse = choice?.content || "";
+        break;
+      }
     } else if (agent.llm_provider === "deepseek") {
       const modelMap: Record<string, string> = {
         "deepseek-v3": "deepseek-chat",
@@ -423,18 +442,37 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       const actualModel = modelMap[requestedModel] || requestedModel;
       console.log(`DeepSeek: requested=${requestedModel}, using=${actualModel}`);
 
-      const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${agent.llm_api_key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: actualModel, messages }),
-      });
-      const resText = await res.text();
-      console.log(`DeepSeek API: status=${res.status}, body=${resText.substring(0, 500)}`);
-      if (!res.ok) {
-        throw new Error(`DeepSeek API error ${res.status}: ${resText.substring(0, 300)}`);
+      const conv = [...messages];
+      for (let iter = 0; iter < 4; iter++) {
+        const body: any = { model: actualModel, messages: conv };
+        if (ecuroTools) { body.tools = ecuroTools; body.tool_choice = "auto"; }
+        const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${agent.llm_api_key}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const resText = await res.text();
+        console.log(`DeepSeek API: status=${res.status}, body=${resText.substring(0, 400)}`);
+        if (!res.ok) {
+          throw new Error(`DeepSeek API error ${res.status}: ${resText.substring(0, 300)}`);
+        }
+        const data = JSON.parse(resText);
+        const choice = data.choices?.[0]?.message;
+        const toolCalls = choice?.tool_calls;
+        if (toolCalls && toolCalls.length > 0) {
+          conv.push({ role: "assistant", content: choice.content || "", tool_calls: toolCalls } as any);
+          for (const tc of toolCalls) {
+            let parsedArgs: any = {};
+            try { parsedArgs = JSON.parse(tc.function?.arguments || "{}"); } catch {}
+            const toolResult = await runEcuroTool(tc.function?.name, parsedArgs);
+            console.log(`Ecuro tool ${tc.function?.name} →`, JSON.stringify(toolResult).substring(0, 300));
+            conv.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(toolResult) } as any);
+          }
+          continue;
+        }
+        aiResponse = choice?.content || "";
+        break;
       }
-      const data = JSON.parse(resText);
-      aiResponse = data.choices?.[0]?.message?.content || "";
     }
 
     if (!aiResponse) {

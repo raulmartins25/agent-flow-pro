@@ -202,8 +202,8 @@ Você tem acesso a duas ferramentas para agendar consultas na ${data.ecuro_clini
 - schedule_appointment: cria o agendamento depois que o paciente escolhe um horário.
 
 REGRAS:
-1. Quando o paciente concordar em agendar, SEMPRE chame primeiro \`get_availability\` ANTES de propor qualquer horário. NUNCA invente datas ou horários.
-2. Ofereça ao paciente pelo menos 2 dos horários retornados pela ferramenta, em formato amigável (ex.: "Segunda 04/05 às 11h" ou "Terça 05/05 às 14h"). NÃO liste mais de 4 opções por mensagem.
+1. Quando o paciente concordar em agendar (qualquer sinal de "sim", "pode", "quero", "vamos", "fechado"), você DEVE chamar IMEDIATAMENTE a ferramenta \`get_availability\` na MESMA resposta. NUNCA responda apenas "deixa eu verificar" sem chamar a ferramenta — isso trava a conversa. NUNCA invente datas ou horários.
+2. Ofereça ao paciente PELO MENOS 3 horários em 3 DIAS DIFERENTES retornados pela ferramenta, em formato amigável (ex.: "Segunda 04/05 às 11h", "Quarta 06/05 às 14h", "Sexta 08/05 às 09h"). Se o paciente pedir um período (manhã/tarde/sábado), filtre pelos slots desse período mas sempre traga 3 dias distintos quando houver disponibilidade. NÃO liste mais de 4 opções por mensagem.
 3. Quando o paciente confirmar um horário específico, chame \`schedule_appointment\` com o start_time EXATO (ISO 8601) retornado pela ferramenta.
 4. NUNCA peça telefone, WhatsApp ou número de contato ao paciente — o sistema já tem o número automaticamente (ele está conversando pelo WhatsApp). Para agendar, você só precisa do NOME COMPLETO. CPF, e-mail e data de nascimento são OPCIONAIS — só registre se o paciente oferecer espontaneamente; nunca bloqueie o agendamento por falta deles.
 5. Após o agendamento ser criado com sucesso, confirme ao paciente com data, horário e clínica. Em seguida emita TRANSFER_LEAD para notificar a equipe.
