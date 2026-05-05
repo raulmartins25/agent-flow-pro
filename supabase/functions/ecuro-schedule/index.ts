@@ -108,8 +108,11 @@ Deno.serve(async (req) => {
           convContactName = convRow?.contact_name || null;
         }
         const cfgAny = cfg as any;
-        const externalId = (data && typeof data === 'object')
-          ? (data.id || data.appointmentId || data.appointment_id || null)
+        const appt = (data && typeof data === 'object')
+          ? (data.data?.appointment || data.appointment || data.data || data)
+          : null;
+        const externalId = appt
+          ? (appt.id || appt.appointmentId || appt.appointment_id || appt._id || null)
           : null;
         await supabase.from('appointments').insert({
           user_id: agentRow?.user_id,
