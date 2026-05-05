@@ -54,6 +54,7 @@ Deno.serve(async (req) => {
     const end = end_time ? new Date(end_time) : new Date(start.getTime() + duration * 60000);
 
     const payload = {
+      type: 'create-appointment',
       clinicId: cfg.clinic_id,
       specialtyId: cfg.specialty_id,
       startTime: start.toISOString(),
