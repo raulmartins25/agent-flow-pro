@@ -53,18 +53,22 @@ Deno.serve(async (req) => {
     const start = new Date(start_time);
     const end = end_time ? new Date(end_time) : new Date(start.getTime() + duration * 60000);
 
+    const cfgAny2 = cfg as any;
     const payload = {
-      type: (body && body.webhook_type) || 'appointment',
-      clinicId: cfg.clinic_id,
-      specialtyId: cfg.specialty_id,
-      startTime: start.toISOString(),
-      endTime: end.toISOString(),
-      patient: {
-        name: patient_name,
-        phone: patient_phone,
-        cpf: patient_cpf,
-        email: patient_email,
-        birthdate: patient_birthdate,
+      type: 'APPOINTMENT_CREATED',
+      data: {
+        ecuro_clinic_id: cfg.clinic_id,
+        specialty: cfgAny2.specialty_name || cfg.specialty_id,
+        description: 'Consulta agendada via WhatsApp',
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        customer: {
+          name: patient_name,
+          email: patient_email,
+          phone: patient_phone,
+          cpf: patient_cpf,
+          birthdate: patient_birthdate,
+        },
       },
     };
 
