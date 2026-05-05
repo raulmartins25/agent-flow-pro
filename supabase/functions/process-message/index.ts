@@ -523,6 +523,8 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
     // endings when the next sentence is long enough to deserve its own paragraph.
     function prettifyForWhatsApp(text: string): string {
       let t = text.replace(/\r\n/g, "\n");
+      // Safety: convert literal "\n" / "\r\n" sequences (when the LLM escapes wrong) into real newlines
+      t = t.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\r/g, "\n");
       // Collapse 3+ newlines to 2
       t = t.replace(/\n{3,}/g, "\n\n");
       // Insert \n\n before common emoji "bullets" if they're inline
