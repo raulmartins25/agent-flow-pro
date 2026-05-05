@@ -166,6 +166,71 @@ serve(async (req) => {
     else if (msg.message?.documentMessage) { mediaType = "document"; }
     else if (msg.message?.videoMessage) { mediaType = "video"; }
 
+    // === AUDIO TRANSCRIPTION ===
+    // If message is audio, fetch base64 from Evolution and transcribe via Lovable AI (Gemini)
+    let transcribedContent = content;
+    if (mediaType === "audio" && !content) {
+      try {
+        console.log("Audio message detected, fetching base64 from Evolution...");
+        const b64Resp = await fetch(
+          `${device.evolution_api_url}/chat/getBase64FromMediaMessage/${device.instance_name}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: device.evolution_api_key,
+            },
+            body: JSON.stringify({
+              message: { key: msg.key },
+              convertToMp4: false,
+            }),
+          }
+        );
+        const b64Data = await b64Resp.json();
+        const audioBase64 = b64Data?.base64 || b64Data?.data;
+        if (!audioBase64) {
+          console.error("Evolution returned no base64:", JSON.stringify(b64Data).slice(0, 300));
+        } else {
+          const mimetype = msg.message?.audioMessage?.mimetype || "audio/ogg";
+          const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${Deno.env.get("LOVABLE_API_KEY")}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash",
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    { type: "text", text: "Transcreva o áudio a seguir em português brasileiro. Responda APENAS com a transcrição literal, sem comentários, sem aspas, sem prefixos." },
+                    { type: "input_audio", input_audio: { data: audioBase64, format: mimetype.includes("mp3") ? "mp3" : "ogg" } },
+                  ],
+                },
+              ],
+            }),
+          });
+          if (!aiResp.ok) {
+            const errTxt = await aiResp.text();
+            console.error("Transcription failed:", aiResp.status, errTxt.slice(0, 300));
+          } else {
+            const aiData = await aiResp.json();
+            const transcript = aiData?.choices?.[0]?.message?.content?.trim() || "";
+            if (transcript) {
+              transcribedContent = `[Áudio transcrito] ${transcript}`;
+              console.log("Audio transcribed:", transcript.slice(0, 200));
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Audio transcription error:", (e as Error).message);
+      }
+      if (!transcribedContent) {
+        transcribedContent = "[Áudio recebido — não foi possível transcrever]";
+      }
+    }
+
     // Look for existing conversations (any non-closed status)
     const { data: existingConvs } = await supabase
       .from("conversations")
