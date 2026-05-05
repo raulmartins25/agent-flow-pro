@@ -297,6 +297,8 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
     ];
 
     let aiResponse = "";
+    let lastScheduleResult: any = null;
+    let scheduleSucceeded = false;
 
     // Check if Ecuro integration is enabled for this agent
     const { data: ecuroIntegration } = await supabase
@@ -365,7 +367,10 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
               ...args,
             }),
           });
-          return await r.json();
+          const result = await r.json();
+          lastScheduleResult = { ok: r.ok, result, args };
+          if (r.ok && result?.success) scheduleSucceeded = true;
+          return result;
         }
         return { error: "unknown tool" };
       } catch (e) {
@@ -475,6 +480,32 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       }
     }
 
+    // Fallback: if scheduling succeeded but the LLM didn't produce a final user-facing message,
+    // build the confirmation deterministically so the patient never gets left hanging.
+    if (scheduleSucceeded && (!aiResponse || aiResponse.trim().length < 20)) {
+      try {
+        const startIso = lastScheduleResult?.args?.start_time;
+        const cfgAny: any = ecuroIntegration?.config || {};
+        const clinicName = cfgAny.clinic_name || cfgAny.clinic || "";
+        let when = "";
+        if (startIso) {
+          const d = new Date(startIso);
+          const dias = ["domingo","segunda-feira","terça-feira","quarta-feira","quinta-feira","sexta-feira","sábado"];
+          const dia = dias[d.getDay()];
+          const dd = String(d.getDate()).padStart(2,"0");
+          const mm = String(d.getMonth()+1).padStart(2,"0");
+          const yyyy = d.getFullYear();
+          const hh = String(d.getHours()).padStart(2,"0");
+          const mi = String(d.getMinutes()).padStart(2,"0");
+          when = `${dia}, ${dd}/${mm}/${yyyy} às ${hh}h${mi !== "00" ? mi : ""}`;
+        }
+        aiResponse = `Prontinho! ✅ Seu agendamento está confirmado.\n\n📅 ${when}${clinicName ? `\n📍 ${clinicName}` : ""}\n\nVou avisar nossa equipe. Te esperamos lá! 💛 TRANSFER_LEAD`;
+        console.log("Schedule fallback message generated (LLM returned empty)");
+      } catch (e) {
+        console.error("Schedule fallback failed", e);
+      }
+    }
+
     if (!aiResponse) {
       console.error(`Empty AI response. Provider=${agent.llm_provider}, Model=${agent.llm_model}`);
       return new Response(JSON.stringify({ error: "Empty AI response" }), {
@@ -485,6 +516,33 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
     let shouldTransfer = aiResponse.includes("TRANSFER_LEAD");
     const shouldEndConversation = aiResponse.includes("END_CONVERSATION");
     let cleanResponse = aiResponse.replace(/TRANSFER_LEAD/g, "").replace(/END_CONVERSATION/g, "").trim();
+
+    // --- Auto-format: ensure WhatsApp readability with double line breaks ---
+    // Many models ignore the \n\n instruction and send a single block. Insert breaks
+    // before sentences that start with emoji bullets (📅 ⏰ 📍 ✅ 💛 etc) or after sentence
+    // endings when the next sentence is long enough to deserve its own paragraph.
+    function prettifyForWhatsApp(text: string): string {
+      let t = text.replace(/\r\n/g, "\n");
+      // Collapse 3+ newlines to 2
+      t = t.replace(/\n{3,}/g, "\n\n");
+      // Insert \n\n before common emoji "bullets" if they're inline
+      t = t.replace(/([^\n])\s+(?=(?:📅|⏰|📍|✅|💛|🎯|🗓️|🕐|📌|👉|✨))/gu, "$1\n\n");
+      // Break after sentence-ending punctuation followed by a capital letter (likely new idea),
+      // but only if the line is already long (>120 chars without breaks).
+      const lines = t.split("\n");
+      const out: string[] = [];
+      for (const line of lines) {
+        if (line.length > 140 && !line.includes("\n")) {
+          // split on ". " / "! " / "? " preserving the punctuation
+          const parts = line.split(/(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÂÊÔÃÕÇ])/);
+          out.push(parts.join("\n\n"));
+        } else {
+          out.push(line);
+        }
+      }
+      return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    }
+    cleanResponse = prettifyForWhatsApp(cleanResponse);
 
     // --- Programmatic transfer detection ---
     const questions = (config?.qualification_questions as any[]) || [];
