@@ -58,7 +58,9 @@ Deno.serve(async (req) => {
       type: 'APPOINTMENT_CREATED',
       data: {
         ecuro_clinic_id: cfg.clinic_id,
-        specialty: cfgAny2.specialty_name || cfg.specialty_id,
+        specialty: cfg.specialty_id,
+        specialty_id: cfg.specialty_id,
+        speciality_id: cfg.specialty_id,
         description: 'Consulta agendada via WhatsApp',
         start_time: start.toISOString(),
         end_time: end.toISOString(),
