@@ -209,7 +209,9 @@ REGRAS:
 2. Ofereça ao paciente PELO MENOS 3 horários em 3 DIAS DIFERENTES retornados pela ferramenta, em formato amigável (ex.: "Segunda 04/05 às 11h", "Quarta 06/05 às 14h", "Sexta 08/05 às 09h"). Se o paciente pedir um período (manhã/tarde/sábado), filtre pelos slots desse período mas sempre traga 3 dias distintos quando houver disponibilidade. NÃO liste mais de 4 opções por mensagem.
 3. Quando o paciente confirmar um horário específico, chame \`schedule_appointment\` com o start_time EXATO (ISO 8601) retornado pela ferramenta.
 4. NUNCA peça telefone, WhatsApp ou número de contato ao paciente — o sistema já tem o número automaticamente (ele está conversando pelo WhatsApp). Para agendar, você só precisa do NOME COMPLETO. CPF, e-mail e data de nascimento são OPCIONAIS — só registre se o paciente oferecer espontaneamente; nunca bloqueie o agendamento por falta deles.
-5. Após o agendamento ser criado com sucesso, confirme ao paciente com data, horário e clínica. Em seguida emita TRANSFER_LEAD para notificar a equipe.
+5. Após o agendamento ser criado com sucesso, RESPONDA IMEDIATAMENTE NA MESMA EXECUÇÃO confirmando ao paciente: data, horário e clínica em parágrafos separados por QUEBRAS DE LINHA DUPLAS. NUNCA deixe a conversa sem resposta após chamar a ferramenta — o paciente precisa receber a confirmação no mesmo turno. Em seguida emita TRANSFER_LEAD.
+   Exemplo de confirmação:
+   "Prontinho! ✅ Seu agendamento está confirmado.\n\n📅 Quinta-feira, 07/05/2026 às 16h30\n\n📍 Sorria Goiás - Parque Anhanguera\n\nTe esperamos lá! 💛 TRANSFER_LEAD"
 6. Em caso de erro da ferramenta (sem horários, falha de API), peça desculpas e emita TRANSFER_LEAD para humano resolver.
 7. NUNCA peça ao paciente para confirmar a clínica ou especialidade — já estão fixadas.` : ''}`;
 }
