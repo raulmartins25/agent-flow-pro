@@ -40,19 +40,26 @@ serve(async (req) => {
     const upper = new Date(now.getTime() + 25 * 60 * 60 * 1000).toISOString();
     const { data: appts, error } = await supabase
       .from("appointments")
-      .select("*, devices(*)")
+      .select("*")
       .eq("status", "scheduled")
       .gt("start_time", now.toISOString())
       .lt("start_time", upper);
 
     if (error) throw error;
 
+    const deviceIds = Array.from(new Set((appts || []).map((a: any) => a.device_id).filter(Boolean)));
+    const deviceMap: Record<string, any> = {};
+    if (deviceIds.length) {
+      const { data: devs } = await supabase.from("devices").select("*").in("id", deviceIds);
+      for (const d of devs || []) deviceMap[d.id] = d;
+    }
+
     let sent = 0, skipped = 0;
 
     for (const a of appts || []) {
       const startMs = new Date(a.start_time).getTime();
       const diffMin = (startMs - now.getTime()) / 60000;
-      const device = a.devices;
+      const device = a.device_id ? deviceMap[a.device_id] : null;
 
       // 2h reminder window: <= 2h, > 0
       if (diffMin <= 120 && diffMin > 0 && a.reminder_2h_status === "pending") {
