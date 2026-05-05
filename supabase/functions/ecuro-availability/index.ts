@@ -50,9 +50,9 @@ Deno.serve(async (req) => {
     const cfg = integ.config as { clinic_id: string; specialty_id: string; environment?: 'dev' | 'prod' };
     const env = cfg.environment === 'prod' ? 'prod' : 'dev';
 
-    const today = new Date();
-    const future = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const sd = start_date || today.toISOString().slice(0, 10);
+    const now = new Date();
+    const future = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const sd = start_date || now.toISOString().slice(0, 10);
     const ed = end_date || future.toISOString().slice(0, 10);
 
     const qs = new URLSearchParams({
@@ -93,6 +93,8 @@ Deno.serve(async (req) => {
           if (!h.start || !date) continue;
           const startIso = timeToIso(date, h.start);
           const endIso = h.end ? timeToIso(date, h.end) : startIso;
+          // Only show future slots (skip anything <= now BRT)
+          if (new Date(startIso).getTime() <= Date.now()) continue;
           slots.push({ start: startIso, end: endIso, label: fmtPtBr(startIso) });
         }
       }
@@ -102,7 +104,9 @@ Deno.serve(async (req) => {
       for (const s of list) {
         const start = s.start || s.startTime || s.start_time;
         const end = s.end || s.endTime || s.end_time;
-        if (start) slots.push({ start, end: end || start, label: fmtPtBr(start) });
+        if (!start) continue;
+        if (new Date(start).getTime() <= Date.now()) continue;
+        slots.push({ start, end: end || start, label: fmtPtBr(start) });
       }
     }
 
