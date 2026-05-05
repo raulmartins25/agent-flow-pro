@@ -297,6 +297,8 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
     ];
 
     let aiResponse = "";
+    let lastScheduleResult: any = null;
+    let scheduleSucceeded = false;
 
     // Check if Ecuro integration is enabled for this agent
     const { data: ecuroIntegration } = await supabase
