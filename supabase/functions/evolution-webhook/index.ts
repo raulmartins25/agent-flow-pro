@@ -270,7 +270,7 @@ serve(async (req) => {
       const isDuplicate = await insertMessageIdempotent(supabase, {
         conversation_id: conversation.id,
         role: "user",
-        content,
+        content: transcribedContent,
         evolution_message_id: evolutionMessageId,
         media_url: mediaUrl,
         media_type: mediaType,
@@ -303,7 +303,7 @@ serve(async (req) => {
       const isDuplicate = await insertMessageIdempotent(supabase, {
         conversation_id: conversation.id,
         role: "user",
-        content,
+        content: transcribedContent,
         evolution_message_id: evolutionMessageId,
         media_url: mediaUrl,
         media_type: mediaType,
@@ -400,7 +400,7 @@ serve(async (req) => {
     const isDuplicate = await insertMessageIdempotent(supabase, {
       conversation_id: conversation.id,
       role: "user",
-      content,
+      content: transcribedContent,
       evolution_message_id: evolutionMessageId,
       media_url: mediaUrl,
       media_type: mediaType,
