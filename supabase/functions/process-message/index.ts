@@ -367,7 +367,10 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
               ...args,
             }),
           });
-          return await r.json();
+          const result = await r.json();
+          lastScheduleResult = { ok: r.ok, result, args };
+          if (r.ok && result?.success) scheduleSucceeded = true;
+          return result;
         }
         return { error: "unknown tool" };
       } catch (e) {
