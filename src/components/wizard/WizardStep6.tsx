@@ -35,6 +35,7 @@ const standardVars = [
   { label: '📅 Data', value: '{{data}}' },
   { label: '🤖 Agente', value: '{{agente}}' },
   { label: '📋 Todas P&R', value: '{{perguntas_respostas}}' },
+  { label: '📄 Resumo da conversa', value: '{{resumo_conversa}}' },
 ];
 
 const emojiList = [
