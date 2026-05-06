@@ -517,16 +517,16 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
     const shouldEndConversation = aiResponse.includes("END_CONVERSATION");
     let cleanResponse = aiResponse.replace(/TRANSFER_LEAD/g, "").replace(/END_CONVERSATION/g, "").trim();
 
-    // --- Auto-format: single block, no line breaks (user preference) ---
+    // --- Auto-format: preserve paragraph breaks for WhatsApp readability ---
     function prettifyForWhatsApp(text: string): string {
       let t = text.replace(/\r\n/g, "\n");
-      // Convert escaped newline literals into real newlines first, then strip them all
+      // Convert escaped newline literals (when LLM outputs "\n" as text) into real newlines
       t = t.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\r/g, "\n");
-      // Replace ALL newlines with a single space → tudo junto, sem pular linha
-      t = t.replace(/\n+/g, " ");
-      // Collapse multiple spaces
-      t = t.replace(/[ \t]{2,}/g, " ").trim();
-      return t;
+      // Collapse 3+ newlines to exactly 2 (one blank line between paragraphs)
+      t = t.replace(/\n{3,}/g, "\n\n");
+      // Insert paragraph break before emoji bullets if inline
+      t = t.replace(/([^\n])\s+(?=(?:📅|⏰|📍|✅|💛|🎯|🗓️|🕐|📌))/gu, "$1\n\n");
+      return t.trim();
     }
     cleanResponse = prettifyForWhatsApp(cleanResponse);
 
@@ -689,7 +689,8 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
     // Always strip SEND_MEDIA tokens from visible text
     const mediaRegex = /SEND_MEDIA:([a-f0-9-]+)/gi;
     const mediaMatches = [...cleanResponse.matchAll(mediaRegex)];
-    cleanResponse = cleanResponse.replace(mediaRegex, "").replace(/\s{2,}/g, " ").trim();
+    // Strip media tokens; collapse only spaces/tabs (preserve \n\n paragraph breaks for WhatsApp)
+    cleanResponse = cleanResponse.replace(mediaRegex, "").replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 
     // Bug 1 fix: Only process media sending if NOT a transfer
     if (!shouldTransfer) {
