@@ -317,6 +317,21 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       .maybeSingle();
     const ecuroEnabled = !!ecuroIntegration?.enabled;
 
+    // Inject clinic location info (address + maps URL) when configured
+    {
+      const c: any = ecuroIntegration?.config || {};
+      const clinicName = c.clinic_name || null;
+      const address = c.address || null;
+      const mapsUrl = c.maps_url || null;
+      if (clinicName || address || mapsUrl) {
+        systemPrompt += `\n\nLOCAL DA CLÍNICA (use SEMPRE estes dados exatos quando o paciente pedir endereço ou localização):`;
+        if (clinicName) systemPrompt += `\n- Nome: ${clinicName}`;
+        if (address) systemPrompt += `\n- Endereço: ${address}`;
+        if (mapsUrl) systemPrompt += `\n- Link do mapa: ${mapsUrl}`;
+        systemPrompt += `\nNUNCA invente, encurte ou modifique este link. NÃO use goo.gl, bit.ly ou qualquer encurtador. Envie o link exatamente como acima.`;
+      }
+    }
+
     const ecuroTools = ecuroEnabled ? [
       {
         type: "function",
@@ -534,12 +549,14 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
     // --- Auto-format: preserve paragraph breaks for WhatsApp readability ---
     function prettifyForWhatsApp(text: string): string {
       let t = text.replace(/\r\n/g, "\n");
-      // Convert escaped newline literals (when LLM outputs "\n" as text) into real newlines
       t = t.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\r/g, "\n");
-      // Collapse 3+ newlines to exactly 2 (one blank line between paragraphs)
       t = t.replace(/\n{3,}/g, "\n\n");
-      // Insert paragraph break before emoji bullets if inline
       t = t.replace(/([^\n])\s+(?=(?:📅|⏰|📍|✅|💛|🎯|🗓️|🕐|📌))/gu, "$1\n\n");
+      // Replace any hallucinated short URLs (goo.gl/bit.ly/tinyurl) with the configured maps URL when available
+      const cfgMaps = (ecuroIntegration?.config as any)?.maps_url;
+      if (cfgMaps) {
+        t = t.replace(/https?:\/\/(?:goo\.gl|bit\.ly|tinyurl\.com|t\.co|cutt\.ly)\/\S+/gi, cfgMaps);
+      }
       return t.trim();
     }
     cleanResponse = prettifyForWhatsApp(cleanResponse);

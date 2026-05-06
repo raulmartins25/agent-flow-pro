@@ -7,14 +7,26 @@ const corsHeaders = {
 };
 
 function fmtPtBr(iso: string): string {
+  // Always render in BRT (America/Sao_Paulo) regardless of server tz
   const d = new Date(iso);
-  const dias = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-  const dia = dias[d.getDay()];
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mi = String(d.getMinutes()).padStart(2, '0');
-  return `${dia} ${dd}/${mm} às ${hh}:${mi}`;
+  const TZ = 'America/Sao_Paulo';
+  const parts = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: TZ,
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value || '';
+  const weekdayRaw = get('weekday');
+  const weekday = weekdayRaw.charAt(0).toUpperCase() + weekdayRaw.slice(1).replace('-feira', '');
+  const dd = get('day');
+  const mm = get('month');
+  const hh = get('hour');
+  const mi = get('minute');
+  return `${weekday} ${dd}/${mm} às ${hh}:${mi}`;
 }
 
 Deno.serve(async (req) => {
