@@ -420,13 +420,14 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
         break;
       }
     } else if (agent.llm_provider === "openai") {
+      const openaiKey = agent.llm_api_key || Deno.env.get("OPENAI_API_KEY");
       const conv = [...messages];
       for (let iter = 0; iter < 4; iter++) {
-        const body: any = { model: agent.llm_model || "gpt-4o", messages: conv };
+        const body: any = { model: agent.llm_model || "gpt-4.1-mini", messages: conv };
         if (ecuroTools) { body.tools = ecuroTools; body.tool_choice = "auto"; }
         const res = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
-          headers: { Authorization: `Bearer ${agent.llm_api_key}`, "Content-Type": "application/json" },
+          headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
         const data = await res.json();
