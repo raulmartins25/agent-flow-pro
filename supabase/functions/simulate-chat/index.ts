@@ -117,8 +117,15 @@ serve(async (req) => {
       }
     }
 
+    const nowBR = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      weekday: "long", day: "2-digit", month: "long", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    }).format(new Date());
+    const dateNote = `\n\nDATA E HORA ATUAL (America/Sao_Paulo): ${nowBR}.\nNUNCA invente datas. Para agendamentos, use SOMENTE as datas/labels retornados por get_availability — não calcule sozinho.`;
+
     const allMessages = [
-      { role: "system", content: prompt },
+      { role: "system", content: (prompt || "") + dateNote },
       ...messages,
     ];
 

@@ -263,6 +263,14 @@ serve(async (req) => {
 
     let systemPrompt = agent.prompt_compiled;
 
+    // Inject current date/time (America/Sao_Paulo) so the LLM never invents dates
+    const nowBR = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      weekday: "long", day: "2-digit", month: "long", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    }).format(new Date());
+    systemPrompt += `\n\nDATA E HORA ATUAL (America/Sao_Paulo): ${nowBR}.\nNUNCA invente datas. Para qualquer agendamento, use SOMENTE as datas e labels retornados pela ferramenta get_availability — não calcule você mesmo.`;
+
     // Clean contact name: reject JIDs and pure-numeric strings
     const rawContactName = contact_name || null;
     const cleanContactName = rawContactName && 
