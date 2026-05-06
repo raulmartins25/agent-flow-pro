@@ -141,6 +141,12 @@ serve(async (req) => {
         .from("conversations")
         .update({ status: "closed", agent_paused: true, is_waiting_reply: false })
         .eq("id", conversation_id);
+      // Trigger transfer-on-pause if configured
+      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/transfer-on-pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+        body: JSON.stringify({ conversation_id }),
+      }).catch((e) => console.error("transfer-on-pause invoke error", e));
       return new Response(JSON.stringify({ ok: true, blocked: true, reason: "blacklisted" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
