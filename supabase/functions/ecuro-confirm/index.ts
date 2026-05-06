@@ -11,7 +11,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { appointment_id, external_id, agent_id, reason, conversation_id } = body || {};
+    const { appointment_id, external_id, agent_id, conversation_id } = body || {};
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -32,8 +32,7 @@ Deno.serve(async (req) => {
       });
     }
     if (!appt.external_id) {
-      await supabase.from('appointments').update({ status: 'cancelled' }).eq('id', appt.id);
-      return new Response(JSON.stringify({ ok: true, note: 'no external_id, only local cancel' }), {
+      return new Response(JSON.stringify({ ok: true, note: 'no external_id, nothing to confirm on Ecuro' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -58,8 +57,8 @@ Deno.serve(async (req) => {
     const payload = {
       id: appt.external_id,
       ecuro_clinic_id: cfg.clinic_id,
-      status: 'CANCELED',
-      comments: reason || 'Cancelado pelo paciente via WhatsApp',
+      status: 'CONFIRMED',
+      comments: 'Confirmado pelo paciente via WhatsApp',
     };
 
     const res = await ecuroFetch(env, '/update-appointment', {
@@ -70,17 +69,13 @@ Deno.serve(async (req) => {
     let data: any;
     try { data = JSON.parse(text); } catch { data = text; }
 
-    if (res.ok) {
-      await supabase.from('appointments').update({ status: 'cancelled' }).eq('id', appt.id);
-    }
-
     if (conversation_id) {
       await supabase.from('messages').insert({
         conversation_id,
         role: 'system',
         content: res.ok
-          ? `[Ecuro] Agendamento ${appt.external_id} cancelado (PUT /update-appointment)`
-          : `[Ecuro] Falha ao cancelar (${res.status}): ${typeof data === 'string' ? data : JSON.stringify(data)}`,
+          ? `[Ecuro] Agendamento ${appt.external_id} confirmado (PUT /update-appointment)`
+          : `[Ecuro] Falha ao confirmar (${res.status}): ${typeof data === 'string' ? data : JSON.stringify(data)}`,
       });
     }
 
@@ -93,7 +88,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e) {
-    console.error('ecuro-cancel error', e);
+    console.error('ecuro-confirm error', e);
     return new Response(JSON.stringify({ error: String(e) }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

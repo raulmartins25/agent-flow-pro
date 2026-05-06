@@ -244,6 +244,23 @@ serve(async (req) => {
             reminder_24h_status: appt.reminder_24h_status === "pending" ? "skipped" : appt.reminder_24h_status,
             reminder_2h_status: appt.reminder_2h_status === "pending" ? "skipped" : appt.reminder_2h_status,
           }).eq("id", appt.id);
+          // Sincroniza confirmação com Ecuro (fire-and-forget)
+          try {
+            fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ecuro-confirm`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+              },
+              body: JSON.stringify({
+                appointment_id: appt.id,
+                agent_id: appt.agent_id,
+                conversation_id,
+              }),
+            }).catch((e) => console.error('ecuro-confirm call failed', e));
+          } catch (e) {
+            console.error('ecuro-confirm trigger error', e);
+          }
           appointmentContext = `\n\nCONTEXTO CRÍTICO: O paciente CONFIRMOU presença no agendamento. Agradeça brevemente, deseje uma boa consulta e encerre. NÃO faça mais perguntas.`;
         }
       }

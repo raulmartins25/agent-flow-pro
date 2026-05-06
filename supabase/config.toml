@@ -12,6 +12,12 @@ verify_jwt = false
 [functions.ecuro-schedule]
 verify_jwt = false
 
+[functions.ecuro-cancel]
+verify_jwt = false
+
+[functions.ecuro-confirm]
+verify_jwt = false
+
 [functions.public-simulator-agent]
 verify_jwt = false
 
