@@ -131,6 +131,7 @@ export function WizardStep6() {
               <SelectContent>
                 <SelectItem value="after_all_questions">Após todas as perguntas</SelectItem>
                 <SelectItem value="after_specific">Após pergunta específica</SelectItem>
+                <SelectItem value="on_pause">Quando o agente for pausado</SelectItem>
               </SelectContent>
             </Select>
           </div>
