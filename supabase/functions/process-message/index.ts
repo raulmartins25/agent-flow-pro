@@ -317,6 +317,21 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       .maybeSingle();
     const ecuroEnabled = !!ecuroIntegration?.enabled;
 
+    // Inject clinic location info (address + maps URL) when configured
+    {
+      const c: any = ecuroIntegration?.config || {};
+      const clinicName = c.clinic_name || null;
+      const address = c.address || null;
+      const mapsUrl = c.maps_url || null;
+      if (clinicName || address || mapsUrl) {
+        systemPrompt += `\n\nLOCAL DA CLÍNICA (use SEMPRE estes dados exatos quando o paciente pedir endereço ou localização):`;
+        if (clinicName) systemPrompt += `\n- Nome: ${clinicName}`;
+        if (address) systemPrompt += `\n- Endereço: ${address}`;
+        if (mapsUrl) systemPrompt += `\n- Link do mapa: ${mapsUrl}`;
+        systemPrompt += `\nNUNCA invente, encurte ou modifique este link. NÃO use goo.gl, bit.ly ou qualquer encurtador. Envie o link exatamente como acima.`;
+      }
+    }
+
     const ecuroTools = ecuroEnabled ? [
       {
         type: "function",
