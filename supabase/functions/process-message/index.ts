@@ -430,6 +430,11 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
           headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error(`OpenAI error ${res.status}: ${errText}`);
+          throw new Error(`OpenAI ${res.status}: ${errText.slice(0, 300)}`);
+        }
         const data = await res.json();
         const choice = data.choices?.[0]?.message;
         const toolCalls = choice?.tool_calls;
