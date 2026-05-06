@@ -689,7 +689,8 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
     // Always strip SEND_MEDIA tokens from visible text
     const mediaRegex = /SEND_MEDIA:([a-f0-9-]+)/gi;
     const mediaMatches = [...cleanResponse.matchAll(mediaRegex)];
-    cleanResponse = cleanResponse.replace(mediaRegex, "").replace(/\s{2,}/g, " ").trim();
+    // Strip media tokens; collapse only spaces/tabs (preserve \n\n paragraph breaks for WhatsApp)
+    cleanResponse = cleanResponse.replace(mediaRegex, "").replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 
     // Bug 1 fix: Only process media sending if NOT a transfer
     if (!shouldTransfer) {
