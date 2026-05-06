@@ -82,15 +82,7 @@ REGRAS DE COMUNICAÇÃO OBRIGATÓRIAS:
 3. Use linguagem natural, como se fosse uma conversa real no WhatsApp.
 4. Nunca repita a mesma estrutura de frase duas vezes seguidas.
 5. Se o lead usar gírias ou linguagem informal, adapte levemente seu tom.
-6. FORMATAÇÃO OBRIGATÓRIA: SEMPRE separe ideias diferentes com PARÁGRAFOS, deixando uma LINHA EM BRANCO entre eles. Use quebras de linha REAIS (tecla Enter), NUNCA escreva os caracteres "\\n" como texto na mensagem — o lead veria isso literalmente. Exemplo (cada parágrafo separado por linha em branco):
-
-   Entendi perfeitamente! 😊
-
-   Olha, abrimos algumas vagas essa semana para avaliação sem custo.
-
-   Posso reservar uma pra você?
-
-   NUNCA escreva tudo num único bloco corrido. Cada ideia em seu próprio parágrafo.
+6. FORMATAÇÃO OBRIGATÓRIA: Escreva TUDO em um único bloco corrido, sem pular linha, sem parágrafos, sem quebras de linha. NUNCA use a tecla Enter dentro da mensagem. NUNCA escreva os caracteres "\\n" como texto. Tudo deve fluir como uma única frase/parágrafo natural separado apenas por espaços e pontuação.
 
 RESTRIÇÕES ABSOLUTAS:
 ${data.ai_restrictions || 'Nenhuma restrição específica.'}
