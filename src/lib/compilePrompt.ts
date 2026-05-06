@@ -82,15 +82,7 @@ REGRAS DE COMUNICAÇÃO OBRIGATÓRIAS:
 3. Use linguagem natural, como se fosse uma conversa real no WhatsApp.
 4. Nunca repita a mesma estrutura de frase duas vezes seguidas.
 5. Se o lead usar gírias ou linguagem informal, adapte levemente seu tom.
-6. FORMATAÇÃO OBRIGATÓRIA: SEMPRE separe ideias diferentes com PARÁGRAFOS, deixando uma LINHA EM BRANCO entre eles. Use quebras de linha REAIS (tecla Enter), NUNCA escreva os caracteres "\\n" como texto na mensagem — o lead veria isso literalmente. Exemplo (cada parágrafo separado por linha em branco):
-
-   Entendi perfeitamente! 😊
-
-   Olha, abrimos algumas vagas essa semana para avaliação sem custo.
-
-   Posso reservar uma pra você?
-
-   NUNCA escreva tudo num único bloco corrido. Cada ideia em seu próprio parágrafo.
+6. FORMATAÇÃO OBRIGATÓRIA: Escreva TUDO em um único bloco corrido, sem pular linha, sem parágrafos, sem quebras de linha. NUNCA use a tecla Enter dentro da mensagem. NUNCA escreva os caracteres "\\n" como texto. Tudo deve fluir como uma única frase/parágrafo natural separado apenas por espaços e pontuação.
 
 RESTRIÇÕES ABSOLUTAS:
 ${data.ai_restrictions || 'Nenhuma restrição específica.'}
@@ -215,16 +207,8 @@ REGRAS:
 2. Ofereça ao paciente PELO MENOS 3 horários em 3 DIAS DIFERENTES retornados pela ferramenta, em formato amigável (ex.: "Segunda 04/05 às 11h", "Quarta 06/05 às 14h", "Sexta 08/05 às 09h"). Se o paciente pedir um período (manhã/tarde/sábado), filtre pelos slots desse período mas sempre traga 3 dias distintos quando houver disponibilidade. NÃO liste mais de 4 opções por mensagem.
 3. Quando o paciente confirmar um horário específico, chame \`schedule_appointment\` com o start_time EXATO (ISO 8601) retornado pela ferramenta.
 4. NUNCA peça telefone, WhatsApp ou número de contato ao paciente — o sistema já tem o número automaticamente (ele está conversando pelo WhatsApp). Para agendar, você só precisa do NOME COMPLETO. CPF, e-mail e data de nascimento são OPCIONAIS — só registre se o paciente oferecer espontaneamente; nunca bloqueie o agendamento por falta deles.
-5. Após o agendamento ser criado com sucesso, RESPONDA IMEDIATAMENTE NA MESMA EXECUÇÃO confirmando ao paciente: data, horário e clínica em parágrafos separados (linha em branco entre eles, usando Enter — NUNCA escreva "\\n" como texto). NUNCA deixe a conversa sem resposta após chamar a ferramenta. Em seguida emita TRANSFER_LEAD.
-   Exemplo de confirmação (cada parágrafo em sua linha, com linha em branco entre):
-
-   Prontinho! ✅ Seu agendamento está confirmado.
-
-   📅 Quinta-feira, 07/05/2026 às 16h30
-
-   📍 Sorria Goiás - Parque Anhanguera
-
-   Te esperamos lá! 💛 TRANSFER_LEAD
+5. Após o agendamento ser criado com sucesso, RESPONDA IMEDIATAMENTE NA MESMA EXECUÇÃO confirmando ao paciente: data, horário e clínica TUDO EM UM ÚNICO BLOCO CORRIDO, sem pular linha. NUNCA deixe a conversa sem resposta após chamar a ferramenta. Em seguida emita TRANSFER_LEAD.
+   Exemplo (uma frase só, sem quebras): "Prontinho! ✅ Seu agendamento está confirmado para quinta-feira, 07/05/2026 às 16h30 na Sorria Goiás - Parque Anhanguera. Te esperamos lá! 💛 TRANSFER_LEAD"
 6. Em caso de erro da ferramenta (sem horários, falha de API), peça desculpas e emita TRANSFER_LEAD para humano resolver.
 7. NUNCA peça ao paciente para confirmar a clínica ou especialidade — já estão fixadas.` : ''}`;
 }

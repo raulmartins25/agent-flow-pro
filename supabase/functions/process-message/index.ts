@@ -517,32 +517,16 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
     const shouldEndConversation = aiResponse.includes("END_CONVERSATION");
     let cleanResponse = aiResponse.replace(/TRANSFER_LEAD/g, "").replace(/END_CONVERSATION/g, "").trim();
 
-    // --- Auto-format: ensure WhatsApp readability with double line breaks ---
-    // Many models ignore the \n\n instruction and send a single block. Insert breaks
-    // before sentences that start with emoji bullets (📅 ⏰ 📍 ✅ 💛 etc) or after sentence
-    // endings when the next sentence is long enough to deserve its own paragraph.
+    // --- Auto-format: single block, no line breaks (user preference) ---
     function prettifyForWhatsApp(text: string): string {
       let t = text.replace(/\r\n/g, "\n");
-      // Safety: convert literal "\n" / "\r\n" sequences (when the LLM escapes wrong) into real newlines
+      // Convert escaped newline literals into real newlines first, then strip them all
       t = t.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\r/g, "\n");
-      // Collapse 3+ newlines to 2
-      t = t.replace(/\n{3,}/g, "\n\n");
-      // Insert \n\n before common emoji "bullets" if they're inline
-      t = t.replace(/([^\n])\s+(?=(?:📅|⏰|📍|✅|💛|🎯|🗓️|🕐|📌|👉|✨))/gu, "$1\n\n");
-      // Break after sentence-ending punctuation followed by a capital letter (likely new idea),
-      // but only if the line is already long (>120 chars without breaks).
-      const lines = t.split("\n");
-      const out: string[] = [];
-      for (const line of lines) {
-        if (line.length > 140 && !line.includes("\n")) {
-          // split on ". " / "! " / "? " preserving the punctuation
-          const parts = line.split(/(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÂÊÔÃÕÇ])/);
-          out.push(parts.join("\n\n"));
-        } else {
-          out.push(line);
-        }
-      }
-      return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+      // Replace ALL newlines with a single space → tudo junto, sem pular linha
+      t = t.replace(/\n+/g, " ");
+      // Collapse multiple spaces
+      t = t.replace(/[ \t]{2,}/g, " ").trim();
+      return t;
     }
     cleanResponse = prettifyForWhatsApp(cleanResponse);
 
