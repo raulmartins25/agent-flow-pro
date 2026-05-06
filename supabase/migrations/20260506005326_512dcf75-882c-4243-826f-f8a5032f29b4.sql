@@ -1,0 +1,1 @@
+UPDATE public.agents SET llm_provider='openai', llm_model='gpt-4.1-mini' WHERE id='9d01e0ff-9bf3-4fe5-8979-cd10e692ec6e';
