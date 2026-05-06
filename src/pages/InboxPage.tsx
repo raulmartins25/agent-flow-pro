@@ -140,6 +140,9 @@ export default function InboxPage() {
     await supabase.from('conversations').update({ agent_paused: newVal }).eq('id', activeConv.id);
     setActiveConv({ ...activeConv, agent_paused: newVal });
     toast.success(newVal ? 'Agente pausado' : 'Agente retomado');
+    if (newVal) {
+      supabase.functions.invoke('transfer-on-pause', { body: { conversation_id: activeConv.id } }).catch((e) => console.error('transfer-on-pause invoke error', e));
+    }
   };
 
   const sendMessage = async () => {
