@@ -97,6 +97,7 @@ export function WizardStep6() {
     ? questions.map((q: any, i: number) => `*${i + 1}. ${q.question}*\n→ Resposta do lead`).join('\n')
     : '1. Orçamento: R$5.000\n2. Prazo: 30 dias';
   preview = preview.replace(/\{\{perguntas_respostas\}\}/g, bulkExample);
+  preview = preview.replace(/\{\{resumo_conversa\}\}/g, 'Lead demonstrou interesse no plano premium, mencionou orçamento de R$5.000 e prazo de 30 dias. Próximo passo: agendar reunião de fechamento.');
 
   return (
     <div className="space-y-6">
