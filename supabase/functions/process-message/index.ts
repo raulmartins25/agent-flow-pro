@@ -215,8 +215,26 @@ serve(async (req) => {
         const isCancel = cancelWords.some(w => msgLower.includes(w));
 
         if (isCancel) {
-          await supabase.from("appointments").update({ status: "cancelled" }).eq("id", appt.id);
-          appointmentContext = `\n\nCONTEXTO CRÍTICO: O paciente pediu para CANCELAR/REMARCAR o agendamento. Reconheça com empatia, informe que vai passar para a equipe ajustar e emita TRANSFER_LEAD.`;
+          // Cancela na Ecuro (se houver external_id) e localmente
+          try {
+            await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ecuro-cancel`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+              },
+              body: JSON.stringify({
+                appointment_id: appt.id,
+                agent_id: appt.agent_id,
+                conversation_id,
+                reason: 'Paciente solicitou cancelamento via WhatsApp',
+              }),
+            });
+          } catch (e) {
+            console.error('ecuro-cancel call failed', e);
+            await supabase.from("appointments").update({ status: "cancelled" }).eq("id", appt.id);
+          }
+          appointmentContext = `\n\nCONTEXTO CRÍTICO: O paciente pediu para CANCELAR/REMARCAR o agendamento. O cancelamento já foi processado no sistema. Reconheça com empatia, confirme que o agendamento foi cancelado e informe que a equipe entrará em contato se quiser remarcar. Emita TRANSFER_LEAD.`;
         } else if (isConfirm) {
           const via = appt.reminder_2h_status === "sent" ? "2h" : "24h";
           await supabase.from("appointments").update({
