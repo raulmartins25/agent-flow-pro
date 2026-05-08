@@ -260,24 +260,26 @@ export default function InboxPage() {
             <div className="flex flex-col items-center py-8 text-center px-4">
               <MessageSquare className="h-8 w-8 text-muted-foreground mb-2" />
               <p className="text-sm text-muted-foreground">Nenhuma conversa</p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={async () => {
-                if (!user) return;
-                const { data: agent } = await supabase.from('agents').select('id').eq('user_id', user.id).limit(1).single();
-                if (!agent) { toast.error('Crie um agente primeiro'); return; }
-                const { data: conv } = await supabase.from('conversations').insert({
-                  agent_id: agent.id, contact_number: '5511999990000', contact_name: 'Teste Inbox', status: 'active',
-                  last_message_at: new Date().toISOString(),
-                }).select().single();
-                if (!conv) { toast.error('Erro ao criar conversa'); return; }
-                await supabase.from('messages').insert({
-                  conversation_id: conv.id, role: 'user', content: 'Olá, esta é uma mensagem de teste!',
-                });
-                toast.success('Conversa de teste criada');
-                const { data: refreshed } = await supabase.from('conversations').select('*, agents(name), devices(name)').order('last_message_at', { ascending: false });
-                setConversations((refreshed as any[]) ?? []);
-              }}>
-                <Plus className="mr-1 h-3 w-3" />Criar conversa de teste
-              </Button>
+              {!isClient && (
+                <Button variant="outline" size="sm" className="mt-3" onClick={async () => {
+                  if (!user) return;
+                  const { data: agent } = await supabase.from('agents').select('id').eq('user_id', user.id).limit(1).single();
+                  if (!agent) { toast.error('Crie um agente primeiro'); return; }
+                  const { data: conv } = await supabase.from('conversations').insert({
+                    agent_id: agent.id, contact_number: '5511999990000', contact_name: 'Teste Inbox', status: 'active',
+                    last_message_at: new Date().toISOString(),
+                  }).select().single();
+                  if (!conv) { toast.error('Erro ao criar conversa'); return; }
+                  await supabase.from('messages').insert({
+                    conversation_id: conv.id, role: 'user', content: 'Olá, esta é uma mensagem de teste!',
+                  });
+                  toast.success('Conversa de teste criada');
+                  const { data: refreshed } = await supabase.from('conversations').select('*, agents(name), devices(name)').order('last_message_at', { ascending: false });
+                  setConversations((refreshed as any[]) ?? []);
+                }}>
+                  <Plus className="mr-1 h-3 w-3" />Criar conversa de teste
+                </Button>
+              )}
             </div>
           ) : filtered.map(c => (
             <button key={c.id} onClick={() => setActiveConv(c)}
