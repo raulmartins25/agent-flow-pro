@@ -91,14 +91,13 @@ export default function Login() {
                 Esqueceu a senha?
               </button>
             )}
-            <div>
-              <button
-                onClick={() => { setIsSignUp(!isSignUp); setIsForgot(false); }}
-                className="text-primary hover:underline"
-              >
-                {isSignUp ? 'Já tem conta? Entrar' : 'Não tem conta? Cadastre-se'}
-              </button>
-            </div>
+            {isForgot && (
+              <div>
+                <button onClick={() => setIsForgot(false)} className="text-primary hover:underline">
+                  Voltar ao login
+                </button>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
