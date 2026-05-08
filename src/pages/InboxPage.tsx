@@ -62,6 +62,13 @@ export default function InboxPage() {
     });
   }, []);
 
+  // Force device filter for client role
+  useEffect(() => {
+    if (isClient && allowedDeviceIds.length > 0) {
+      setDeviceFilter(allowedDeviceIds[0]);
+    }
+  }, [isClient, allowedDeviceIds]);
+
   const fetchConvs = async () => {
     const { data } = await supabase
       .from('conversations')
