@@ -434,6 +434,24 @@ export type Database = {
         }
         Relationships: []
       }
+      client_device_access: {
+        Row: {
+          created_at: string
+          device_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           agent_id: string
@@ -669,11 +687,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      user_can_access_device: {
+        Args: { _device: string; _user: string }
+        Returns: boolean
+      }
     }
     Enums: {
       agent_status: "active" | "paused" | "inactive"
       agent_type: "receptive" | "prospecting"
-      app_role: "admin" | "moderator" | "user"
+      app_role: "admin" | "moderator" | "user" | "client"
       appointment_status: "scheduled" | "confirmed" | "cancelled" | "completed"
       campaign_status: "pending" | "running" | "paused" | "completed" | "error"
       contact_status: "pending" | "sent" | "error" | "replied"
@@ -814,7 +836,7 @@ export const Constants = {
     Enums: {
       agent_status: ["active", "paused", "inactive"],
       agent_type: ["receptive", "prospecting"],
-      app_role: ["admin", "moderator", "user"],
+      app_role: ["admin", "moderator", "user", "client"],
       appointment_status: ["scheduled", "confirmed", "cancelled", "completed"],
       campaign_status: ["pending", "running", "paused", "completed", "error"],
       contact_status: ["pending", "sent", "error", "replied"],

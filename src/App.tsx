@@ -25,8 +25,14 @@ import TransfersPage from "@/pages/TransfersPage";
 import ProspectingPage from "@/pages/ProspectingPage";
 import AppointmentsPage from "@/pages/AppointmentsPage";
 import NotFound from "@/pages/NotFound";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const queryClient = new QueryClient();
+
+const RootRedirect = () => {
+  const { isClient } = useUserRole();
+  return <Navigate to={isClient ? "/inbox" : "/dashboard"} replace />;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -39,7 +45,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/simulator/share/:token" element={<PublicSimulatorPage />} />
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/" element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/devices" element={<DevicesPage />} />

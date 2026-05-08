@@ -3,6 +3,7 @@ import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
+import { useUserRole } from '@/hooks/useUserRole';
 import {
   Sidebar,
   SidebarContent,
@@ -37,6 +38,11 @@ export function AppSidebar() {
   const location = useLocation();
   const { signOut } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { isClient } = useUserRole();
+
+  const items = isClient
+    ? navItems.filter((n) => ['/inbox', '/appointments', '/transfers'].includes(n.url))
+    : navItems;
 
   return (
     <Sidebar collapsible="icon">
@@ -53,7 +59,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
+              {items.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink

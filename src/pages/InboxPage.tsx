@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Pause, Play, Send, MessageSquare, Download, X, Smartphone, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/stores/authStore';
+import { useUserRole } from '@/hooks/useUserRole';
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 type Conversation = {
@@ -40,6 +41,7 @@ const displayPhone = (raw: string) => raw?.replace(/@s\.whatsapp\.net$/i, '') ||
 export default function InboxPage() {
   const { conversationId } = useParams();
   const user = useAuthStore((s) => s.user);
+  const { isClient, allowedDeviceIds } = useUserRole();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [repliedConvIds, setRepliedConvIds] = useState<Set<string>>(new Set());
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
@@ -59,6 +61,13 @@ export default function InboxPage() {
       setDevices((data as Device[]) ?? []);
     });
   }, []);
+
+  // Force device filter for client role
+  useEffect(() => {
+    if (isClient && allowedDeviceIds.length > 0) {
+      setDeviceFilter(allowedDeviceIds[0]);
+    }
+  }, [isClient, allowedDeviceIds]);
 
   const fetchConvs = async () => {
     const { data } = await supabase
@@ -227,7 +236,7 @@ export default function InboxPage() {
               </button>
             ))}
           </div>
-          {devices.length > 0 && (
+          {devices.length > 0 && !isClient && (
             <Select value={deviceFilter} onValueChange={setDeviceFilter}>
               <SelectTrigger className="h-8 text-xs">
                 <SelectValue placeholder="Todos os dispositivos" />
@@ -251,24 +260,26 @@ export default function InboxPage() {
             <div className="flex flex-col items-center py-8 text-center px-4">
               <MessageSquare className="h-8 w-8 text-muted-foreground mb-2" />
               <p className="text-sm text-muted-foreground">Nenhuma conversa</p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={async () => {
-                if (!user) return;
-                const { data: agent } = await supabase.from('agents').select('id').eq('user_id', user.id).limit(1).single();
-                if (!agent) { toast.error('Crie um agente primeiro'); return; }
-                const { data: conv } = await supabase.from('conversations').insert({
-                  agent_id: agent.id, contact_number: '5511999990000', contact_name: 'Teste Inbox', status: 'active',
-                  last_message_at: new Date().toISOString(),
-                }).select().single();
-                if (!conv) { toast.error('Erro ao criar conversa'); return; }
-                await supabase.from('messages').insert({
-                  conversation_id: conv.id, role: 'user', content: 'Olá, esta é uma mensagem de teste!',
-                });
-                toast.success('Conversa de teste criada');
-                const { data: refreshed } = await supabase.from('conversations').select('*, agents(name), devices(name)').order('last_message_at', { ascending: false });
-                setConversations((refreshed as any[]) ?? []);
-              }}>
-                <Plus className="mr-1 h-3 w-3" />Criar conversa de teste
-              </Button>
+              {!isClient && (
+                <Button variant="outline" size="sm" className="mt-3" onClick={async () => {
+                  if (!user) return;
+                  const { data: agent } = await supabase.from('agents').select('id').eq('user_id', user.id).limit(1).single();
+                  if (!agent) { toast.error('Crie um agente primeiro'); return; }
+                  const { data: conv } = await supabase.from('conversations').insert({
+                    agent_id: agent.id, contact_number: '5511999990000', contact_name: 'Teste Inbox', status: 'active',
+                    last_message_at: new Date().toISOString(),
+                  }).select().single();
+                  if (!conv) { toast.error('Erro ao criar conversa'); return; }
+                  await supabase.from('messages').insert({
+                    conversation_id: conv.id, role: 'user', content: 'Olá, esta é uma mensagem de teste!',
+                  });
+                  toast.success('Conversa de teste criada');
+                  const { data: refreshed } = await supabase.from('conversations').select('*, agents(name), devices(name)').order('last_message_at', { ascending: false });
+                  setConversations((refreshed as any[]) ?? []);
+                }}>
+                  <Plus className="mr-1 h-3 w-3" />Criar conversa de teste
+                </Button>
+              )}
             </div>
           ) : filtered.map(c => (
             <button key={c.id} onClick={() => setActiveConv(c)}
