@@ -673,7 +673,7 @@ export type Database = {
     Enums: {
       agent_status: "active" | "paused" | "inactive"
       agent_type: "receptive" | "prospecting"
-      app_role: "admin" | "moderator" | "user"
+      app_role: "admin" | "moderator" | "user" | "client"
       appointment_status: "scheduled" | "confirmed" | "cancelled" | "completed"
       campaign_status: "pending" | "running" | "paused" | "completed" | "error"
       contact_status: "pending" | "sent" | "error" | "replied"
@@ -814,7 +814,7 @@ export const Constants = {
     Enums: {
       agent_status: ["active", "paused", "inactive"],
       agent_type: ["receptive", "prospecting"],
-      app_role: ["admin", "moderator", "user"],
+      app_role: ["admin", "moderator", "user", "client"],
       appointment_status: ["scheduled", "confirmed", "cancelled", "completed"],
       campaign_status: ["pending", "running", "paused", "completed", "error"],
       contact_status: ["pending", "sent", "error", "replied"],
