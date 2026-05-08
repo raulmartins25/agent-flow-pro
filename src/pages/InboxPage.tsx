@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Pause, Play, Send, MessageSquare, Download, X, Smartphone, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/stores/authStore';
+import { useUserRole } from '@/hooks/useUserRole';
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 type Conversation = {
