@@ -236,7 +236,7 @@ export default function InboxPage() {
               </button>
             ))}
           </div>
-          {devices.length > 0 && (
+          {devices.length > 0 && !isClient && (
             <Select value={deviceFilter} onValueChange={setDeviceFilter}>
               <SelectTrigger className="h-8 text-xs">
                 <SelectValue placeholder="Todos os dispositivos" />
