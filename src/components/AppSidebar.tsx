@@ -38,6 +38,11 @@ export function AppSidebar() {
   const location = useLocation();
   const { signOut } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { isClient } = useUserRole();
+
+  const items = isClient
+    ? navItems.filter((n) => ['/inbox', '/appointments', '/transfers'].includes(n.url))
+    : navItems;
 
   return (
     <Sidebar collapsible="icon">
