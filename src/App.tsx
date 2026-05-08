@@ -25,8 +25,14 @@ import TransfersPage from "@/pages/TransfersPage";
 import ProspectingPage from "@/pages/ProspectingPage";
 import AppointmentsPage from "@/pages/AppointmentsPage";
 import NotFound from "@/pages/NotFound";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const queryClient = new QueryClient();
+
+const RootRedirect = () => {
+  const { isClient } = useUserRole();
+  return <Navigate to={isClient ? "/inbox" : "/dashboard"} replace />;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
