@@ -24,6 +24,7 @@ import LogsPage from "@/pages/LogsPage";
 import TransfersPage from "@/pages/TransfersPage";
 import ProspectingPage from "@/pages/ProspectingPage";
 import AppointmentsPage from "@/pages/AppointmentsPage";
+import ReportsPage from "@/pages/ReportsPage";
 import NotFound from "@/pages/NotFound";
 import { useUserRole } from "@/hooks/useUserRole";
 
@@ -63,6 +64,7 @@ const App = () => (
               <Route path="/prospecting" element={<ProspectingPage />} />
               <Route path="/warmup" element={<ChipWarmupPage />} />
               <Route path="/logs" element={<LogsPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />

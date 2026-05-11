@@ -146,7 +146,7 @@ export default function InboxPage() {
   const togglePause = async () => {
     if (!activeConv) return;
     const newVal = !activeConv.agent_paused;
-    await supabase.from('conversations').update({ agent_paused: newVal }).eq('id', activeConv.id);
+    await supabase.from('conversations').update({ agent_paused: newVal, paused_by: newVal ? 'human' : 'none' }).eq('id', activeConv.id);
     setActiveConv({ ...activeConv, agent_paused: newVal });
     toast.success(newVal ? 'Agente pausado' : 'Agente retomado');
     if (newVal) {

@@ -1,4 +1,4 @@
-import { Bot, LayoutDashboard, Inbox, Megaphone, Settings, LogOut, Sun, Moon, Flame, Smartphone, ScrollText, UserCheck, MapPin, CalendarCheck } from 'lucide-react';
+import { Bot, LayoutDashboard, Inbox, Megaphone, Settings, LogOut, Sun, Moon, Flame, Smartphone, ScrollText, UserCheck, MapPin, CalendarCheck, BarChart3 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -29,6 +29,7 @@ const navItems = [
   { title: 'Prospecção', url: '/prospecting', icon: MapPin },
   { title: 'Aquecimento', url: '/warmup', icon: Flame },
   { title: 'Logs', url: '/logs', icon: ScrollText },
+  { title: 'Relatórios', url: '/reports', icon: BarChart3 },
   { title: 'Settings', url: '/settings', icon: Settings },
 ];
 

@@ -139,7 +139,7 @@ serve(async (req) => {
       console.log(`Número ${contactCanonical13} está na blacklist — bloqueando process-message`);
       await supabase
         .from("conversations")
-        .update({ status: "closed", agent_paused: true, is_waiting_reply: false })
+        .update({ status: "closed", agent_paused: true, paused_by: "ai", is_waiting_reply: false })
         .eq("id", conversation_id);
       // Trigger transfer-on-pause if configured
       fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/transfer-on-pause`, {
@@ -183,7 +183,7 @@ serve(async (req) => {
       const goodbyeMsg = "Entendido! Não enviaremos mais mensagens. Se precisar de algo no futuro, é só chamar. 👋";
 
       await supabase.from("conversations")
-        .update({ status: "closed", agent_paused: true, is_waiting_reply: false })
+        .update({ status: "closed", agent_paused: true, paused_by: "ai", is_waiting_reply: false })
         .eq("id", conversation_id);
 
       await supabase.from("messages").insert({ conversation_id, role: "assistant", content: goodbyeMsg });
@@ -747,7 +747,7 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
 
         await supabase
           .from("conversations")
-          .update({ status: "transferred" })
+          .update({ status: "transferred", agent_paused: true, paused_by: "ai" })
           .eq("id", conversation_id);
 
         console.log(`Lead transferido para: ${transferNum}`);
