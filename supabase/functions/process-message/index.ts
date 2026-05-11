@@ -747,7 +747,7 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
 
         await supabase
           .from("conversations")
-          .update({ status: "transferred" })
+          .update({ status: "transferred", agent_paused: true, paused_by: "ai" })
           .eq("id", conversation_id);
 
         console.log(`Lead transferido para: ${transferNum}`);
