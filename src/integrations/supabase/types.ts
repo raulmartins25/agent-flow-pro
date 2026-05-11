@@ -465,6 +465,7 @@ export type Database = {
           instance_name: string | null
           is_waiting_reply: boolean
           last_message_at: string | null
+          paused_by: Database["public"]["Enums"]["pause_origin"]
           status: Database["public"]["Enums"]["conversation_status"]
         }
         Insert: {
@@ -479,6 +480,7 @@ export type Database = {
           instance_name?: string | null
           is_waiting_reply?: boolean
           last_message_at?: string | null
+          paused_by?: Database["public"]["Enums"]["pause_origin"]
           status?: Database["public"]["Enums"]["conversation_status"]
         }
         Update: {
@@ -493,6 +495,7 @@ export type Database = {
           instance_name?: string | null
           is_waiting_reply?: boolean
           last_message_at?: string | null
+          paused_by?: Database["public"]["Enums"]["pause_origin"]
           status?: Database["public"]["Enums"]["conversation_status"]
         }
         Relationships: [
@@ -704,6 +707,7 @@ export type Database = {
       llm_provider: "claude" | "openai" | "deepseek"
       media_type: "image" | "audio" | "document" | "video"
       message_role: "user" | "assistant" | "system"
+      pause_origin: "none" | "ai" | "human"
       plan_type: "free" | "pro" | "enterprise"
       reminder_status: "pending" | "sent" | "confirmed" | "skipped"
       tone_type: "formal" | "semi-formal" | "casual"
@@ -845,6 +849,7 @@ export const Constants = {
       llm_provider: ["claude", "openai", "deepseek"],
       media_type: ["image", "audio", "document", "video"],
       message_role: ["user", "assistant", "system"],
+      pause_origin: ["none", "ai", "human"],
       plan_type: ["free", "pro", "enterprise"],
       reminder_status: ["pending", "sent", "confirmed", "skipped"],
       tone_type: ["formal", "semi-formal", "casual"],
