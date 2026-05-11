@@ -145,7 +145,7 @@ serve(async (req) => {
       console.log(`Number ${canonicalRemote} is blacklisted — ignoring`);
       await supabase
         .from("conversations")
-        .update({ status: "closed", agent_paused: true, is_waiting_reply: false })
+        .update({ status: "closed", agent_paused: true, paused_by: "ai", is_waiting_reply: false })
         .eq("agent_id", agent.id)
         .eq("device_id", device.id)
         .eq("contact_number", contactNumber)
