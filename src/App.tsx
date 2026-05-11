@@ -24,6 +24,7 @@ import LogsPage from "@/pages/LogsPage";
 import TransfersPage from "@/pages/TransfersPage";
 import ProspectingPage from "@/pages/ProspectingPage";
 import AppointmentsPage from "@/pages/AppointmentsPage";
+import ReportsPage from "@/pages/ReportsPage";
 import NotFound from "@/pages/NotFound";
 import { useUserRole } from "@/hooks/useUserRole";
 
