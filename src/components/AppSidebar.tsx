@@ -29,6 +29,7 @@ const navItems = [
   { title: 'Prospecção', url: '/prospecting', icon: MapPin },
   { title: 'Aquecimento', url: '/warmup', icon: Flame },
   { title: 'Logs', url: '/logs', icon: ScrollText },
+  { title: 'Relatórios', url: '/reports', icon: BarChart3 },
   { title: 'Settings', url: '/settings', icon: Settings },
 ];
 
