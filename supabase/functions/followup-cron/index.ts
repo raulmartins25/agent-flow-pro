@@ -110,7 +110,7 @@ serve(async (req) => {
       if (disinterestPhrases.some(w => userText.includes(w))) {
         console.log(`Conversa ${conv.id} — desinteresse detectado: "${lastUserMsgs?.[0]?.content}"`);
         await supabase.from("conversations")
-          .update({ status: "closed", agent_paused: true, is_waiting_reply: false })
+          .update({ status: "closed", agent_paused: true, paused_by: "ai", is_waiting_reply: false })
           .eq("id", conv.id);
         continue;
       }
