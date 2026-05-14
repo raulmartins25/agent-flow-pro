@@ -61,7 +61,7 @@ serve(async (req) => {
         console.log(`Conversa ${conv.id} — número ${convCanonical} está na blacklist, encerrando`);
         await supabase
           .from("conversations")
-          .update({ status: "closed", agent_paused: true, is_waiting_reply: false })
+          .update({ status: "closed", agent_paused: true, paused_by: "ai", is_waiting_reply: false })
           .eq("id", conv.id);
         continue;
       }
