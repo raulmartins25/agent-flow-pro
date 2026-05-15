@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Bot, MessageSquare, Hand, PauseCircle, CalendarCheck, TrendingUp, Download } from 'lucide-react';
+import { Bot, MessageSquare, Hand, UserCheck, CalendarCheck, TrendingUp, Download } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { useReports, type ReportFilters } from '@/hooks/useReports';
@@ -32,6 +32,13 @@ export default function ReportsPage() {
         icon: Hand,
         color: 'text-warning',
         description: 'Conversas pausadas — todas que aparecem em amarelo no Inbox (humano assumiu ou foi pausada após transferência).',
+      },
+      {
+        title: 'Transferidas pela IA',
+        value: totals?.ai_transfers ?? 0,
+        icon: UserCheck,
+        color: 'text-info',
+        description: 'Conversas que a IA transferiu para um humano — todas que aparecem em azul no Inbox (status transferido).',
       },
       {
         title: 'Agendamentos feitos',
