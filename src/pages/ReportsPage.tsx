@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Bot, MessageSquare, Hand, PauseCircle, CalendarCheck, TrendingUp, Download } from 'lucide-react';
+import { Bot, MessageSquare, Hand, UserCheck, CalendarCheck, TrendingUp, Download } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { useReports, type ReportFilters } from '@/hooks/useReports';
@@ -32,6 +32,13 @@ export default function ReportsPage() {
         icon: Hand,
         color: 'text-warning',
         description: 'Conversas pausadas — todas que aparecem em amarelo no Inbox (humano assumiu ou foi pausada após transferência).',
+      },
+      {
+        title: 'Transferidas pela IA',
+        value: totals?.ai_transfers ?? 0,
+        icon: UserCheck,
+        color: 'text-info',
+        description: 'Conversas que a IA transferiu para um humano — todas que aparecem em azul no Inbox (status transferido).',
       },
       {
         title: 'Agendamentos feitos',
@@ -171,21 +178,23 @@ export default function ReportsPage() {
                     <TableHead>Dispositivo</TableHead>
                     <TableHead className="text-right">Conversas</TableHead>
                     <TableHead className="text-right">Pausadas</TableHead>
+                    <TableHead className="text-right">Transferidas IA</TableHead>
                     <TableHead className="text-right">Agendamentos</TableHead>
                     <TableHead className="text-right">% Resolução IA</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8">Carregando…</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8">Carregando…</TableCell></TableRow>
                   ) : rows.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Sem dados no período.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Sem dados no período.</TableCell></TableRow>
                   ) : rows.map((r) => (
                     <TableRow key={r.agent_id}>
                       <TableCell className="font-medium">{r.agent_name}</TableCell>
                       <TableCell className="text-muted-foreground">{r.device_name ?? '—'}</TableCell>
                       <TableCell className="text-right">{r.attendances}</TableCell>
                       <TableCell className="text-right">{r.paused}</TableCell>
+                      <TableCell className="text-right">{r.ai_transfers}</TableCell>
                       <TableCell className="text-right">{r.appointments}</TableCell>
                       <TableCell className="text-right font-semibold">{r.resolution_pct}%</TableCell>
                     </TableRow>
