@@ -148,6 +148,7 @@ export default function ReportsPage() {
                   <FileText className="mr-2 h-4 w-4" /> {exporting ? 'Gerando…' : 'Exportar PDF'}
                 </Button>
               </div>
+              <div className="space-y-6">
               <div ref={overviewRef} className="space-y-6 bg-background p-2">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {kpis.map((card) => (
