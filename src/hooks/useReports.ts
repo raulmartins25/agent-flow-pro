@@ -150,14 +150,38 @@ export function useReports(filters: ReportFilters) {
           human_paused: 0,
           appointments: 0,
           resolution_pct: 0,
+          active_count: 0,
+          replied_count: 0,
+          paused_count: 0,
+          transferred_count: 0,
         });
+      }
+
+      // Buscar quais conversas têm resposta do usuário (para "em conversa" verde)
+      const convIds = (convs as any[]).map((c) => c.id);
+      let repliedSet = new Set<string>();
+      if (convIds.length) {
+        const { data: replied } = await supabase
+          .from('messages')
+          .select('conversation_id')
+          .in('conversation_id', convIds)
+          .eq('role', 'user');
+        repliedSet = new Set((replied ?? []).map((m: any) => m.conversation_id));
       }
 
       for (const c of convs as any[]) {
         const r = map.get(c.agent_id);
         if (!r) continue;
         r.attendances++;
-        if (c.status === 'transferred') r.ai_transfers++;
+        if (c.status === 'transferred') {
+          r.ai_transfers++;
+          r.transferred_count++;
+        } else if (c.agent_paused) {
+          r.paused_count++;
+        } else if (c.status === 'active') {
+          r.active_count++;
+          if (repliedSet.has(c.id)) r.replied_count++;
+        }
         if (c.agent_paused) {
           if (c.paused_by === 'human') r.human_paused++;
           else r.ai_paused++;
