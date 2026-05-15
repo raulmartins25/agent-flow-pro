@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Bot, MessageSquare, UserCheck, PauseCircle, Hand, CalendarCheck, TrendingUp, Download } from 'lucide-react';
+import { Bot, MessageSquare, UserCheck, PauseCircle, Hand, CalendarCheck, TrendingUp, Download, Circle, MessagesSquare } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { useReports, type ReportFilters } from '@/hooks/useReports';
