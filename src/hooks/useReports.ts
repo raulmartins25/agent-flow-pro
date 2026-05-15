@@ -19,14 +19,16 @@ export interface ReportRow {
   attendances: number;     // conversas iniciadas (deduplicado por contact_number)
   ai_paused: number;       // pausadas pela IA
   human_paused: number;    // pausadas pelo Inbox (humano)
+  ai_transfers: number;    // transferidas para humano pela IA
   appointments: number;    // agendamentos no período
-  resolution_pct: number;  // appointments / attendances
+  resolution_pct: number;  // (appointments + ai_transfers) / attendances
 }
 
 export interface ReportTotals {
   attendances: number;
   ai_paused: number;
   human_paused: number;
+  ai_transfers: number;
   appointments: number;
   resolution_pct: number;
 }
@@ -94,7 +96,7 @@ export function useReports(filters: ReportFilters) {
 
       const { data: convsRaw } = await supabase
         .from('conversations')
-        .select('id, agent_id, contact_number, agent_paused, paused_by, created_at, last_message_at')
+        .select('id, agent_id, contact_number, status, agent_paused, paused_by, created_at, last_message_at')
         .in('agent_id', safeIds)
         .or(`last_message_at.gte.${fromIso},created_at.gte.${fromIso}`)
         .lte('created_at', toIso)
@@ -124,6 +126,7 @@ export function useReports(filters: ReportFilters) {
           attendances: 0,
           ai_paused: 0,
           human_paused: 0,
+          ai_transfers: 0,
           appointments: 0,
           resolution_pct: 0,
         });
@@ -139,6 +142,7 @@ export function useReports(filters: ReportFilters) {
           seen.add(key);
           r.attendances++;
         }
+        if (c.status === 'transferred') r.ai_transfers++;
         if (c.agent_paused) {
           if (c.paused_by === 'human') r.human_paused++;
           else r.ai_paused++;
@@ -150,7 +154,9 @@ export function useReports(filters: ReportFilters) {
       }
 
       for (const r of map.values()) {
-        r.resolution_pct = r.attendances > 0 ? Math.round((r.appointments / r.attendances) * 100) : 0;
+        r.resolution_pct = r.attendances > 0
+          ? Math.round(((r.appointments + r.ai_transfers) / r.attendances) * 100)
+          : 0;
       }
 
       const rowsArr = Array.from(map.values()).sort((a, b) => b.attendances - a.attendances);
@@ -159,6 +165,7 @@ export function useReports(filters: ReportFilters) {
         attendances: 0,
         ai_paused: 0,
         human_paused: 0,
+        ai_transfers: 0,
         appointments: 0,
         resolution_pct: 0,
       };
@@ -166,9 +173,12 @@ export function useReports(filters: ReportFilters) {
         t.attendances += r.attendances;
         t.ai_paused += r.ai_paused;
         t.human_paused += r.human_paused;
+        t.ai_transfers += r.ai_transfers;
         t.appointments += r.appointments;
       }
-      t.resolution_pct = t.attendances > 0 ? Math.round((t.appointments / t.attendances) * 100) : 0;
+      t.resolution_pct = t.attendances > 0
+        ? Math.round(((t.appointments + t.ai_transfers) / t.attendances) * 100)
+        : 0;
 
       // Série diária — conversas iniciadas (deduplicado por contato dentro do dia) vs agendamentos
       const dayMap = new Map<string, DailyPoint>();

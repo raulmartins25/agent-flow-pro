@@ -52,7 +52,7 @@ export default function ReportsPage() {
         value: `${totals?.resolution_pct ?? 0}%`,
         icon: TrendingUp,
         color: 'text-primary',
-        description: 'Agendamentos ÷ total de conversas iniciadas. Mede a taxa de conversão da IA.',
+        description: '(Agendamentos + transferências feitas pela IA) ÷ total de conversas iniciadas. Mede quantos atendimentos a IA conseguiu resolver ou encaminhar.',
       },
     ],
     [totals],
