@@ -30,7 +30,7 @@ export default function ReportsPage() {
     if (!totals) return;
     setExporting(true);
     try {
-      exportOverviewPDF(totals, { periodLabel, agentLabel, deviceLabel });
+      await exportOverviewPDF(totals, { periodLabel, agentLabel, deviceLabel });
       toast.success('Relatório PDF gerado');
     } catch (e) {
       console.error(e);
