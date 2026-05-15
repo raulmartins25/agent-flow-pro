@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Bot, MessageSquare, UserCheck, PauseCircle, Hand, CalendarCheck, TrendingUp, Download } from 'lucide-react';
+import { Bot, MessageSquare, UserCheck, PauseCircle, Hand, CalendarCheck, TrendingUp, Download, Circle, MessagesSquare } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { useReports, type ReportFilters } from '@/hooks/useReports';
@@ -20,6 +20,10 @@ export default function ReportsPage() {
   const kpis = useMemo(
     () => [
       { title: 'Atendimentos', value: totals?.attendances ?? 0, icon: MessageSquare, color: 'text-primary' },
+      { title: 'Ativas', value: totals?.active_count ?? 0, icon: Circle, color: 'text-primary' },
+      { title: 'Em conversa', value: totals?.replied_count ?? 0, icon: MessagesSquare, color: 'text-primary' },
+      { title: 'Pausadas', value: totals?.paused_count ?? 0, icon: PauseCircle, color: 'text-warning' },
+      { title: 'Transferidas', value: totals?.transferred_count ?? 0, icon: UserCheck, color: 'text-info' },
       { title: 'Transferências (IA)', value: totals?.ai_transfers ?? 0, icon: UserCheck, color: 'text-info' },
       { title: 'Pausados pela IA', value: totals?.ai_paused ?? 0, icon: PauseCircle, color: 'text-warning' },
       { title: 'Pausados por humanos', value: totals?.human_paused ?? 0, icon: Hand, color: 'text-warning' },
@@ -149,6 +153,10 @@ export default function ReportsPage() {
                     <TableHead><Bot className="inline h-4 w-4 mr-1" />Agente</TableHead>
                     <TableHead>Dispositivo</TableHead>
                     <TableHead className="text-right">Atendimentos</TableHead>
+                    <TableHead className="text-right"><span className="inline-block h-2 w-2 rounded-full bg-primary mr-1" />Ativas</TableHead>
+                    <TableHead className="text-right">Em conversa</TableHead>
+                    <TableHead className="text-right"><span className="inline-block h-2 w-2 rounded-full bg-warning mr-1" />Pausadas</TableHead>
+                    <TableHead className="text-right"><span className="inline-block h-2 w-2 rounded-full bg-info mr-1" />Transferidas</TableHead>
                     <TableHead className="text-right">Transf. IA</TableHead>
                     <TableHead className="text-right">Pausa IA</TableHead>
                     <TableHead className="text-right">Pausa humano</TableHead>
@@ -158,14 +166,18 @@ export default function ReportsPage() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8">Carregando…</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={12} className="text-center py-8">Carregando…</TableCell></TableRow>
                   ) : rows.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Sem dados no período.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={12} className="text-center py-8 text-muted-foreground">Sem dados no período.</TableCell></TableRow>
                   ) : rows.map((r) => (
                     <TableRow key={r.agent_id}>
                       <TableCell className="font-medium">{r.agent_name}</TableCell>
                       <TableCell className="text-muted-foreground">{r.device_name ?? '—'}</TableCell>
                       <TableCell className="text-right">{r.attendances}</TableCell>
+                      <TableCell className="text-right">{r.active_count}</TableCell>
+                      <TableCell className="text-right">{r.replied_count}</TableCell>
+                      <TableCell className="text-right">{r.paused_count}</TableCell>
+                      <TableCell className="text-right">{r.transferred_count}</TableCell>
                       <TableCell className="text-right">{r.ai_transfers}</TableCell>
                       <TableCell className="text-right">{r.ai_paused}</TableCell>
                       <TableCell className="text-right">{r.human_paused}</TableCell>

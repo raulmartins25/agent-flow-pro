@@ -22,6 +22,11 @@ export interface ReportRow {
   human_paused: number;
   appointments: number;
   resolution_pct: number;
+  // Status do inbox (cores)
+  active_count: number;       // verde (status=active && !paused)
+  replied_count: number;      // verde com resposta do usuário
+  paused_count: number;       // amarelo (agent_paused)
+  transferred_count: number;  // azul (status=transferred)
 }
 
 export interface ReportTotals {
@@ -31,6 +36,10 @@ export interface ReportTotals {
   human_paused: number;
   appointments: number;
   resolution_pct: number;
+  active_count: number;
+  replied_count: number;
+  paused_count: number;
+  transferred_count: number;
 }
 
 export interface DailyPoint {
@@ -141,14 +150,38 @@ export function useReports(filters: ReportFilters) {
           human_paused: 0,
           appointments: 0,
           resolution_pct: 0,
+          active_count: 0,
+          replied_count: 0,
+          paused_count: 0,
+          transferred_count: 0,
         });
+      }
+
+      // Buscar quais conversas têm resposta do usuário (para "em conversa" verde)
+      const convIds = (convs as any[]).map((c) => c.id);
+      let repliedSet = new Set<string>();
+      if (convIds.length) {
+        const { data: replied } = await supabase
+          .from('messages')
+          .select('conversation_id')
+          .in('conversation_id', convIds)
+          .eq('role', 'user');
+        repliedSet = new Set((replied ?? []).map((m: any) => m.conversation_id));
       }
 
       for (const c of convs as any[]) {
         const r = map.get(c.agent_id);
         if (!r) continue;
         r.attendances++;
-        if (c.status === 'transferred') r.ai_transfers++;
+        if (c.status === 'transferred') {
+          r.ai_transfers++;
+          r.transferred_count++;
+        } else if (c.agent_paused) {
+          r.paused_count++;
+        } else if (c.status === 'active') {
+          r.active_count++;
+          if (repliedSet.has(c.id)) r.replied_count++;
+        }
         if (c.agent_paused) {
           if (c.paused_by === 'human') r.human_paused++;
           else r.ai_paused++;
@@ -175,6 +208,10 @@ export function useReports(filters: ReportFilters) {
         human_paused: 0,
         appointments: 0,
         resolution_pct: 0,
+        active_count: 0,
+        replied_count: 0,
+        paused_count: 0,
+        transferred_count: 0,
       };
       for (const r of rowsArr) {
         t.attendances += r.attendances;
@@ -182,6 +219,10 @@ export function useReports(filters: ReportFilters) {
         t.ai_paused += r.ai_paused;
         t.human_paused += r.human_paused;
         t.appointments += r.appointments;
+        t.active_count += r.active_count;
+        t.replied_count += r.replied_count;
+        t.paused_count += r.paused_count;
+        t.transferred_count += r.transferred_count;
       }
       const denom = t.attendances - t.human_paused;
       t.resolution_pct = denom > 0 ? Math.round(((t.ai_transfers + t.appointments) / denom) * 100) : 0;
