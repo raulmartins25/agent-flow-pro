@@ -165,6 +165,7 @@ export function useReports(filters: ReportFilters) {
         attendances: 0,
         ai_paused: 0,
         human_paused: 0,
+        ai_transfers: 0,
         appointments: 0,
         resolution_pct: 0,
       };
@@ -172,9 +173,12 @@ export function useReports(filters: ReportFilters) {
         t.attendances += r.attendances;
         t.ai_paused += r.ai_paused;
         t.human_paused += r.human_paused;
+        t.ai_transfers += r.ai_transfers;
         t.appointments += r.appointments;
       }
-      t.resolution_pct = t.attendances > 0 ? Math.round((t.appointments / t.attendances) * 100) : 0;
+      t.resolution_pct = t.attendances > 0
+        ? Math.round(((t.appointments + t.ai_transfers) / t.attendances) * 100)
+        : 0;
 
       // Série diária — conversas iniciadas (deduplicado por contato dentro do dia) vs agendamentos
       const dayMap = new Map<string, DailyPoint>();
