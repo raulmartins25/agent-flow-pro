@@ -148,7 +148,6 @@ export default function ReportsPage() {
                   <FileText className="mr-2 h-4 w-4" /> {exporting ? 'Gerando…' : 'Exportar PDF'}
                 </Button>
               </div>
-              <div className="space-y-6">
               <div ref={overviewRef} className="space-y-6 bg-background p-2">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {kpis.map((card) => (
@@ -164,28 +163,6 @@ export default function ReportsPage() {
                   </Card>
                 ))}
               </div>
-
-              <Card>
-                <CardHeader><CardTitle>Evolução no período</CardTitle></CardHeader>
-                <CardContent>
-                  <ChartContainer
-                    className="h-72 w-full"
-                    config={{
-                      attendances: { label: 'Conversas iniciadas', color: 'hsl(var(--primary))' },
-                      appointments: { label: 'Agendamentos', color: 'hsl(var(--warning))' },
-                    }}
-                  >
-                    <LineChart data={daily}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" tickFormatter={(d) => d.slice(5)} />
-                      <YAxis allowDecimals={false} />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Line type="monotone" dataKey="attendances" stroke="var(--color-attendances)" strokeWidth={2} dot={false} />
-                      <Line type="monotone" dataKey="appointments" stroke="var(--color-appointments)" strokeWidth={2} dot={false} />
-                    </LineChart>
-                  </ChartContainer>
-                </CardContent>
-              </Card>
 
               <Alert>
                 <Info className="h-4 w-4" />
@@ -209,6 +186,28 @@ export default function ReportsPage() {
                 </AlertDescription>
               </Alert>
               </div>
+
+              <Card>
+                <CardHeader><CardTitle>Evolução no período</CardTitle></CardHeader>
+                <CardContent>
+                  <ChartContainer
+                    className="h-72 w-full"
+                    config={{
+                      attendances: { label: 'Conversas iniciadas', color: 'hsl(var(--primary))' },
+                      appointments: { label: 'Agendamentos', color: 'hsl(var(--warning))' },
+                    }}
+                  >
+                    <LineChart data={daily}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" tickFormatter={(d) => d.slice(5)} />
+                      <YAxis allowDecimals={false} />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Line type="monotone" dataKey="attendances" stroke="var(--color-attendances)" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="appointments" stroke="var(--color-appointments)" strokeWidth={2} dot={false} />
+                    </LineChart>
+                  </ChartContainer>
+                </CardContent>
+              </Card>
             </>
           )}
         </TabsContent>
