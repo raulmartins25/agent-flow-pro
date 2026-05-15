@@ -174,7 +174,7 @@ export default function ReportsPage() {
                     Por isso somar Pausadas + Transferidas + Agendamentos pode ultrapassar o Total de conversas. A <strong>% Resolução da IA</strong> assume essa sobreposição como proxy de eficácia.
                   </p>
                   <p className="pt-1 border-t border-border">
-                    Obs.: a distinção “pausado por humano vs IA” começou a ser registrada recentemente — conversas pausadas antes desse marco aparecem como pausadas pela IA.
+                    Obs.: a distinção “pausado por humano vs IA” começou a ser registrada em <strong>11/05/2026</strong> — conversas pausadas antes dessa data aparecem como pausadas pela IA.
                   </p>
                 </AlertDescription>
               </Alert>
