@@ -16,36 +16,24 @@ export interface ReportRow {
   agent_name: string;
   device_id: string | null;
   device_name: string | null;
-  attendances: number;
-  ai_transfers: number;
-  ai_paused: number;
-  human_paused: number;
-  appointments: number;
-  resolution_pct: number;
-  // Status do inbox (cores)
-  active_count: number;       // verde (status=active && !paused)
-  replied_count: number;      // verde com resposta do usuário
-  paused_count: number;       // amarelo (agent_paused)
-  transferred_count: number;  // azul (status=transferred)
+  attendances: number;     // conversas iniciadas (deduplicado por contact_number)
+  ai_paused: number;       // pausadas pela IA
+  human_paused: number;    // pausadas pelo Inbox (humano)
+  appointments: number;    // agendamentos no período
+  resolution_pct: number;  // appointments / attendances
 }
 
 export interface ReportTotals {
   attendances: number;
-  ai_transfers: number;
   ai_paused: number;
   human_paused: number;
   appointments: number;
   resolution_pct: number;
-  active_count: number;
-  replied_count: number;
-  paused_count: number;
-  transferred_count: number;
 }
 
 export interface DailyPoint {
-  date: string; // YYYY-MM-DD
+  date: string;
   attendances: number;
-  ai_transfers: number;
   appointments: number;
 }
 
@@ -53,17 +41,9 @@ export function getPeriodRange(f: ReportFilters): { from: Date; to: Date } {
   const to = new Date();
   const from = new Date();
   from.setHours(0, 0, 0, 0);
-  if (f.period === 'today') {
-    return { from, to };
-  }
-  if (f.period === '7d') {
-    from.setDate(from.getDate() - 6);
-    return { from, to };
-  }
-  if (f.period === '30d') {
-    from.setDate(from.getDate() - 29);
-    return { from, to };
-  }
+  if (f.period === 'today') return { from, to };
+  if (f.period === '7d') { from.setDate(from.getDate() - 6); return { from, to }; }
+  if (f.period === '30d') { from.setDate(from.getDate() - 29); return { from, to }; }
   return { from: f.from ?? from, to: f.to ?? to };
 }
 
@@ -90,7 +70,6 @@ export function useReports(filters: ReportFilters) {
       const fromIso = from.toISOString();
       const toIso = to.toISOString();
 
-      // Carrega agentes + dispositivos
       const [{ data: ag }, { data: dv }] = await Promise.all([
         supabase.from('agents').select('id, name, device_id, devices:device_id(name)'),
         supabase.from('devices').select('id, name'),
@@ -104,7 +83,6 @@ export function useReports(filters: ReportFilters) {
       }));
       const deviceList = (dv ?? []).map((d: any) => ({ id: d.id, name: d.name }));
 
-      // Filtra por agente/dispositivo
       const filteredAgents = agentList.filter((a) => {
         if (filters.agentId && filters.agentId !== 'all' && a.id !== filters.agentId) return false;
         if (filters.deviceId && filters.deviceId !== 'all' && a.device_id !== filters.deviceId) return false;
@@ -112,13 +90,12 @@ export function useReports(filters: ReportFilters) {
       });
 
       const agentIds = filteredAgents.map((a) => a.id);
+      const safeIds = agentIds.length ? agentIds : ['00000000-0000-0000-0000-000000000000'];
 
-      // Conversas do período (com pelo menos uma mensagem nesse período = atendimento).
-      // Aproximação: usar created_at OR last_message_at no intervalo.
       const { data: convsRaw } = await supabase
         .from('conversations')
-        .select('id, agent_id, status, agent_paused, paused_by, created_at, last_message_at')
-        .in('agent_id', agentIds.length ? agentIds : ['00000000-0000-0000-0000-000000000000'])
+        .select('id, agent_id, contact_number, agent_paused, paused_by, created_at, last_message_at')
+        .in('agent_id', safeIds)
         .or(`last_message_at.gte.${fromIso},created_at.gte.${fromIso}`)
         .lte('created_at', toIso)
         .limit(10000);
@@ -131,13 +108,13 @@ export function useReports(filters: ReportFilters) {
       const { data: appts } = await supabase
         .from('appointments')
         .select('id, agent_id, created_at')
-        .in('agent_id', agentIds.length ? agentIds : ['00000000-0000-0000-0000-000000000000'])
+        .in('agent_id', safeIds)
         .gte('created_at', fromIso)
         .lte('created_at', toIso)
         .limit(10000);
 
-      // Agrega por agente
       const map = new Map<string, ReportRow>();
+      const seenContacts = new Map<string, Set<string>>(); // agent_id -> set(contact_number)
       for (const a of filteredAgents) {
         map.set(a.id, {
           agent_id: a.id,
@@ -145,42 +122,22 @@ export function useReports(filters: ReportFilters) {
           device_id: a.device_id,
           device_name: a.device_name,
           attendances: 0,
-          ai_transfers: 0,
           ai_paused: 0,
           human_paused: 0,
           appointments: 0,
           resolution_pct: 0,
-          active_count: 0,
-          replied_count: 0,
-          paused_count: 0,
-          transferred_count: 0,
         });
-      }
-
-      // Buscar quais conversas têm resposta do usuário (para "em conversa" verde)
-      const convIds = (convs as any[]).map((c) => c.id);
-      let repliedSet = new Set<string>();
-      if (convIds.length) {
-        const { data: replied } = await supabase
-          .from('messages')
-          .select('conversation_id')
-          .in('conversation_id', convIds)
-          .eq('role', 'user');
-        repliedSet = new Set((replied ?? []).map((m: any) => m.conversation_id));
+        seenContacts.set(a.id, new Set());
       }
 
       for (const c of convs as any[]) {
         const r = map.get(c.agent_id);
         if (!r) continue;
-        r.attendances++;
-        if (c.status === 'transferred') {
-          r.ai_transfers++;
-          r.transferred_count++;
-        } else if (c.agent_paused) {
-          r.paused_count++;
-        } else if (c.status === 'active') {
-          r.active_count++;
-          if (repliedSet.has(c.id)) r.replied_count++;
+        const seen = seenContacts.get(c.agent_id)!;
+        const key = c.contact_number ?? c.id;
+        if (!seen.has(key)) {
+          seen.add(key);
+          r.attendances++;
         }
         if (c.agent_paused) {
           if (c.paused_by === 'human') r.human_paused++;
@@ -192,55 +149,46 @@ export function useReports(filters: ReportFilters) {
         if (r) r.appointments++;
       }
 
-      // % qualidade resolução
       for (const r of map.values()) {
-        const denom = r.attendances - r.human_paused;
-        r.resolution_pct = denom > 0 ? Math.round(((r.ai_transfers + r.appointments) / denom) * 100) : 0;
+        r.resolution_pct = r.attendances > 0 ? Math.round((r.appointments / r.attendances) * 100) : 0;
       }
 
       const rowsArr = Array.from(map.values()).sort((a, b) => b.attendances - a.attendances);
 
-      // Totais
       const t: ReportTotals = {
         attendances: 0,
-        ai_transfers: 0,
         ai_paused: 0,
         human_paused: 0,
         appointments: 0,
         resolution_pct: 0,
-        active_count: 0,
-        replied_count: 0,
-        paused_count: 0,
-        transferred_count: 0,
       };
       for (const r of rowsArr) {
         t.attendances += r.attendances;
-        t.ai_transfers += r.ai_transfers;
         t.ai_paused += r.ai_paused;
         t.human_paused += r.human_paused;
         t.appointments += r.appointments;
-        t.active_count += r.active_count;
-        t.replied_count += r.replied_count;
-        t.paused_count += r.paused_count;
-        t.transferred_count += r.transferred_count;
       }
-      const denom = t.attendances - t.human_paused;
-      t.resolution_pct = denom > 0 ? Math.round(((t.ai_transfers + t.appointments) / denom) * 100) : 0;
+      t.resolution_pct = t.attendances > 0 ? Math.round((t.appointments / t.attendances) * 100) : 0;
 
-      // Série diária
+      // Série diária — conversas iniciadas (deduplicado por contato dentro do dia) vs agendamentos
       const dayMap = new Map<string, DailyPoint>();
       const cursor = new Date(from);
       while (cursor <= to) {
         const k = cursor.toISOString().slice(0, 10);
-        dayMap.set(k, { date: k, attendances: 0, ai_transfers: 0, appointments: 0 });
+        dayMap.set(k, { date: k, attendances: 0, appointments: 0 });
         cursor.setDate(cursor.getDate() + 1);
       }
+      const dayContacts = new Map<string, Set<string>>();
       for (const c of convs as any[]) {
         const ref = (c.last_message_at ?? c.created_at).slice(0, 10);
         const p = dayMap.get(ref);
-        if (p) {
+        if (!p) continue;
+        if (!dayContacts.has(ref)) dayContacts.set(ref, new Set());
+        const set = dayContacts.get(ref)!;
+        const key = `${c.agent_id}:${c.contact_number ?? c.id}`;
+        if (!set.has(key)) {
+          set.add(key);
           p.attendances++;
-          if (c.status === 'transferred') p.ai_transfers++;
         }
       }
       for (const ap of (appts ?? []) as any[]) {
@@ -257,9 +205,7 @@ export function useReports(filters: ReportFilters) {
       setDevices(deviceList);
       setLoading(false);
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [filters.period, filters.from?.getTime(), filters.to?.getTime(), filters.agentId, filters.deviceId]);
 
   return { rows, totals, daily, agents, devices, loading };
