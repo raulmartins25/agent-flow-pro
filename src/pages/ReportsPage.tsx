@@ -27,10 +27,10 @@ export default function ReportsPage() {
   const deviceLabel = !filters.deviceId || filters.deviceId === 'all' ? 'Todos' : (devices.find(d => d.id === filters.deviceId)?.name ?? '—');
 
   const handleExportPDF = async () => {
-    if (!overviewRef.current) return;
+    if (!totals) return;
     setExporting(true);
     try {
-      await exportOverviewPDF(overviewRef.current, { periodLabel, agentLabel, deviceLabel });
+      exportOverviewPDF(totals, { periodLabel, agentLabel, deviceLabel });
       toast.success('Relatório PDF gerado');
     } catch (e) {
       console.error(e);
