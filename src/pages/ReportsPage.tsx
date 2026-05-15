@@ -20,6 +20,10 @@ export default function ReportsPage() {
   const kpis = useMemo(
     () => [
       { title: 'Atendimentos', value: totals?.attendances ?? 0, icon: MessageSquare, color: 'text-primary' },
+      { title: 'Ativas', value: totals?.active_count ?? 0, icon: Circle, color: 'text-primary' },
+      { title: 'Em conversa', value: totals?.replied_count ?? 0, icon: MessagesSquare, color: 'text-primary' },
+      { title: 'Pausadas', value: totals?.paused_count ?? 0, icon: PauseCircle, color: 'text-warning' },
+      { title: 'Transferidas', value: totals?.transferred_count ?? 0, icon: UserCheck, color: 'text-info' },
       { title: 'Transferências (IA)', value: totals?.ai_transfers ?? 0, icon: UserCheck, color: 'text-info' },
       { title: 'Pausados pela IA', value: totals?.ai_paused ?? 0, icon: PauseCircle, color: 'text-warning' },
       { title: 'Pausados por humanos', value: totals?.human_paused ?? 0, icon: Hand, color: 'text-warning' },
