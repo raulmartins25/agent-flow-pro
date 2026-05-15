@@ -146,7 +146,15 @@ export default function InboxPage() {
   const togglePause = async () => {
     if (!activeConv) return;
     const newVal = !activeConv.agent_paused;
-    await supabase.from('conversations').update({ agent_paused: newVal, paused_by: newVal ? 'human' : 'none' }).eq('id', activeConv.id);
+    const { error } = await supabase
+      .from('conversations')
+      .update({ agent_paused: newVal, paused_by: newVal ? 'human' : 'none' })
+      .eq('id', activeConv.id);
+    if (error) {
+      console.error('togglePause error', error);
+      toast.error(`Falha ao ${newVal ? 'pausar' : 'retomar'}: ${error.message}`);
+      return;
+    }
     setActiveConv({ ...activeConv, agent_paused: newVal });
     toast.success(newVal ? 'Agente pausado' : 'Agente retomado');
     if (newVal) {
