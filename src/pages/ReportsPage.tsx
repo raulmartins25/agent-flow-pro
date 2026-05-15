@@ -157,9 +157,27 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
 
-              <p className="text-xs text-muted-foreground">
-                A distinção “pausado por humano vs IA” começou a ser registrada recentemente — conversas pausadas antes desse marco aparecem como pausadas pela IA.
-              </p>
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription className="text-xs leading-relaxed space-y-2">
+                  <p className="font-semibold text-foreground">Por que as métricas não somam exatamente o total de conversas?</p>
+                  <p>
+                    As métricas <strong>não são mutuamente exclusivas</strong> e usam regras de contagem diferentes:
+                  </p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li><strong>Conversas iniciadas</strong> conta <em>contatos únicos</em> — se o mesmo número abriu 2 conversas, soma 1.</li>
+                    <li><strong>Pausadas</strong> e <strong>Transferidas IA</strong> contam cada conversa individualmente, sem deduplicar por contato.</li>
+                    <li>Uma mesma conversa pode estar <strong>pausada e transferida</strong> ao mesmo tempo — entra nas duas categorias.</li>
+                    <li><strong>Agendamentos</strong> são uma entidade separada — uma conversa pode gerar mais de um agendamento.</li>
+                  </ul>
+                  <p>
+                    Por isso somar Pausadas + Transferidas + Agendamentos pode ultrapassar o Total de conversas. A <strong>% Resolução da IA</strong> assume essa sobreposição como proxy de eficácia.
+                  </p>
+                  <p className="pt-1 border-t border-border">
+                    Obs.: a distinção “pausado por humano vs IA” começou a ser registrada recentemente — conversas pausadas antes desse marco aparecem como pausadas pela IA.
+                  </p>
+                </AlertDescription>
+              </Alert>
             </>
           )}
         </TabsContent>
