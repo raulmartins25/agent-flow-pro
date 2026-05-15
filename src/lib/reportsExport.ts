@@ -6,6 +6,7 @@ export function exportReportCSV(rows: ReportRow[], filename = 'relatorio.csv') {
     'Dispositivo',
     'Conversas iniciadas',
     'Pausadas',
+    'Transferidas IA',
     'Agendamentos',
     '% Resolução IA',
   ];
@@ -15,6 +16,7 @@ export function exportReportCSV(rows: ReportRow[], filename = 'relatorio.csv') {
       r.device_name ?? '—',
       r.attendances,
       r.paused,
+      r.ai_transfers,
       r.appointments,
       `${r.resolution_pct}%`,
     ]

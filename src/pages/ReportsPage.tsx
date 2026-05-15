@@ -178,21 +178,23 @@ export default function ReportsPage() {
                     <TableHead>Dispositivo</TableHead>
                     <TableHead className="text-right">Conversas</TableHead>
                     <TableHead className="text-right">Pausadas</TableHead>
+                    <TableHead className="text-right">Transferidas IA</TableHead>
                     <TableHead className="text-right">Agendamentos</TableHead>
                     <TableHead className="text-right">% Resolução IA</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8">Carregando…</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8">Carregando…</TableCell></TableRow>
                   ) : rows.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Sem dados no período.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Sem dados no período.</TableCell></TableRow>
                   ) : rows.map((r) => (
                     <TableRow key={r.agent_id}>
                       <TableCell className="font-medium">{r.agent_name}</TableCell>
                       <TableCell className="text-muted-foreground">{r.device_name ?? '—'}</TableCell>
                       <TableCell className="text-right">{r.attendances}</TableCell>
                       <TableCell className="text-right">{r.paused}</TableCell>
+                      <TableCell className="text-right">{r.ai_transfers}</TableCell>
                       <TableCell className="text-right">{r.appointments}</TableCell>
                       <TableCell className="text-right font-semibold">{r.resolution_pct}%</TableCell>
                     </TableRow>
