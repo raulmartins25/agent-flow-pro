@@ -207,6 +207,7 @@ export default function ReportsPage() {
                   </p>
                 </AlertDescription>
               </Alert>
+              </div>
             </>
           )}
         </TabsContent>
