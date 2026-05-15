@@ -22,6 +22,11 @@ export interface ReportRow {
   human_paused: number;
   appointments: number;
   resolution_pct: number;
+  // Status do inbox (cores)
+  active_count: number;       // verde (status=active && !paused)
+  replied_count: number;      // verde com resposta do usuário
+  paused_count: number;       // amarelo (agent_paused)
+  transferred_count: number;  // azul (status=transferred)
 }
 
 export interface ReportTotals {
@@ -31,6 +36,10 @@ export interface ReportTotals {
   human_paused: number;
   appointments: number;
   resolution_pct: number;
+  active_count: number;
+  replied_count: number;
+  paused_count: number;
+  transferred_count: number;
 }
 
 export interface DailyPoint {
