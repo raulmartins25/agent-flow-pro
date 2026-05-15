@@ -17,17 +17,15 @@ export interface ReportRow {
   device_id: string | null;
   device_name: string | null;
   attendances: number;     // conversas iniciadas (deduplicado por contact_number)
-  ai_paused: number;       // pausadas pela IA
-  human_paused: number;    // pausadas pelo Inbox (humano)
-  ai_transfers: number;    // transferidas para humano pela IA
+  paused: number;          // pausadas no Inbox (qualquer agent_paused=true → amarelo)
+  ai_transfers: number;    // transferidas pela IA
   appointments: number;    // agendamentos no período
   resolution_pct: number;  // (appointments + ai_transfers) / attendances
 }
 
 export interface ReportTotals {
   attendances: number;
-  ai_paused: number;
-  human_paused: number;
+  paused: number;
   ai_transfers: number;
   appointments: number;
   resolution_pct: number;
