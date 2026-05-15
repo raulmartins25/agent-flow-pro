@@ -17,17 +17,15 @@ export interface ReportRow {
   device_id: string | null;
   device_name: string | null;
   attendances: number;     // conversas iniciadas (deduplicado por contact_number)
-  ai_paused: number;       // pausadas pela IA
-  human_paused: number;    // pausadas pelo Inbox (humano)
-  ai_transfers: number;    // transferidas para humano pela IA
+  paused: number;          // pausadas no Inbox (qualquer agent_paused=true → amarelo)
+  ai_transfers: number;    // transferidas pela IA
   appointments: number;    // agendamentos no período
   resolution_pct: number;  // (appointments + ai_transfers) / attendances
 }
 
 export interface ReportTotals {
   attendances: number;
-  ai_paused: number;
-  human_paused: number;
+  paused: number;
   ai_transfers: number;
   appointments: number;
   resolution_pct: number;
@@ -124,8 +122,7 @@ export function useReports(filters: ReportFilters) {
           device_id: a.device_id,
           device_name: a.device_name,
           attendances: 0,
-          ai_paused: 0,
-          human_paused: 0,
+          paused: 0,
           ai_transfers: 0,
           appointments: 0,
           resolution_pct: 0,
@@ -143,10 +140,7 @@ export function useReports(filters: ReportFilters) {
           r.attendances++;
         }
         if (c.status === 'transferred') r.ai_transfers++;
-        if (c.agent_paused) {
-          if (c.paused_by === 'human') r.human_paused++;
-          else r.ai_paused++;
-        }
+        if (c.agent_paused) r.paused++;
       }
       for (const ap of (appts ?? []) as any[]) {
         const r = map.get(ap.agent_id);
@@ -163,16 +157,14 @@ export function useReports(filters: ReportFilters) {
 
       const t: ReportTotals = {
         attendances: 0,
-        ai_paused: 0,
-        human_paused: 0,
+        paused: 0,
         ai_transfers: 0,
         appointments: 0,
         resolution_pct: 0,
       };
       for (const r of rowsArr) {
         t.attendances += r.attendances;
-        t.ai_paused += r.ai_paused;
-        t.human_paused += r.human_paused;
+        t.paused += r.paused;
         t.ai_transfers += r.ai_transfers;
         t.appointments += r.appointments;
       }
