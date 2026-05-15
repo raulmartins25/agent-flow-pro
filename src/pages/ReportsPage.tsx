@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Bot, MessageSquare, UserCheck, PauseCircle, Hand, CalendarCheck, TrendingUp, Download, Circle, MessagesSquare } from 'lucide-react';
+import { Bot, MessageSquare, Hand, PauseCircle, CalendarCheck, TrendingUp, Download } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { useReports, type ReportFilters } from '@/hooks/useReports';
@@ -19,16 +19,41 @@ export default function ReportsPage() {
 
   const kpis = useMemo(
     () => [
-      { title: 'Atendimentos', value: totals?.attendances ?? 0, icon: MessageSquare, color: 'text-primary' },
-      { title: 'Ativas', value: totals?.active_count ?? 0, icon: Circle, color: 'text-primary' },
-      { title: 'Em conversa', value: totals?.replied_count ?? 0, icon: MessagesSquare, color: 'text-primary' },
-      { title: 'Pausadas', value: totals?.paused_count ?? 0, icon: PauseCircle, color: 'text-warning' },
-      { title: 'Transferidas', value: totals?.transferred_count ?? 0, icon: UserCheck, color: 'text-info' },
-      { title: 'Transferências (IA)', value: totals?.ai_transfers ?? 0, icon: UserCheck, color: 'text-info' },
-      { title: 'Pausados pela IA', value: totals?.ai_paused ?? 0, icon: PauseCircle, color: 'text-warning' },
-      { title: 'Pausados por humanos', value: totals?.human_paused ?? 0, icon: Hand, color: 'text-warning' },
-      { title: 'Agendamentos', value: totals?.appointments ?? 0, icon: CalendarCheck, color: 'text-primary' },
-      { title: '% Resolução IA', value: `${totals?.resolution_pct ?? 0}%`, icon: TrendingUp, color: 'text-primary' },
+      {
+        title: 'Total de conversas iniciadas',
+        value: totals?.attendances ?? 0,
+        icon: MessageSquare,
+        color: 'text-primary',
+        description: 'Contatos únicos que iniciaram conversa no período (mesma contagem do Inbox).',
+      },
+      {
+        title: 'Pausadas pelo Inbox',
+        value: totals?.human_paused ?? 0,
+        icon: Hand,
+        color: 'text-warning',
+        description: 'Conversas em que um humano clicou em "Pausar" no Inbox para assumir o atendimento.',
+      },
+      {
+        title: 'Pausadas pela IA',
+        value: totals?.ai_paused ?? 0,
+        icon: PauseCircle,
+        color: 'text-warning',
+        description: 'Conversas pausadas automaticamente pelo sistema (transferência, follow-up esgotado, etc).',
+      },
+      {
+        title: 'Agendamentos feitos',
+        value: totals?.appointments ?? 0,
+        icon: CalendarCheck,
+        color: 'text-primary',
+        description: 'Total de agendamentos confirmados/criados pelo agente no período.',
+      },
+      {
+        title: '% Resolução da IA',
+        value: `${totals?.resolution_pct ?? 0}%`,
+        icon: TrendingUp,
+        color: 'text-primary',
+        description: 'Agendamentos ÷ total de conversas iniciadas. Mede a taxa de conversão da IA.',
+      },
     ],
     [totals],
   );
@@ -103,6 +128,7 @@ export default function ReportsPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-3xl font-bold">{card.value}</div>
+                      <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{card.description}</p>
                     </CardContent>
                   </Card>
                 ))}
@@ -114,8 +140,7 @@ export default function ReportsPage() {
                   <ChartContainer
                     className="h-72 w-full"
                     config={{
-                      attendances: { label: 'Atendimentos', color: 'hsl(var(--primary))' },
-                      ai_transfers: { label: 'Transferências', color: 'hsl(var(--info))' },
+                      attendances: { label: 'Conversas iniciadas', color: 'hsl(var(--primary))' },
                       appointments: { label: 'Agendamentos', color: 'hsl(var(--warning))' },
                     }}
                   >
@@ -125,7 +150,6 @@ export default function ReportsPage() {
                       <YAxis allowDecimals={false} />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Line type="monotone" dataKey="attendances" stroke="var(--color-attendances)" strokeWidth={2} dot={false} />
-                      <Line type="monotone" dataKey="ai_transfers" stroke="var(--color-ai_transfers)" strokeWidth={2} dot={false} />
                       <Line type="monotone" dataKey="appointments" stroke="var(--color-appointments)" strokeWidth={2} dot={false} />
                     </LineChart>
                   </ChartContainer>
@@ -133,7 +157,7 @@ export default function ReportsPage() {
               </Card>
 
               <p className="text-xs text-muted-foreground">
-                A coluna “pausados por humano vs IA” começou a ser registrada agora — conversas pausadas antes desse marco aparecem como pausadas pela IA.
+                A distinção “pausado por humano vs IA” começou a ser registrada recentemente — conversas pausadas antes desse marco aparecem como pausadas pela IA.
               </p>
             </>
           )}
@@ -152,35 +176,25 @@ export default function ReportsPage() {
                   <TableRow>
                     <TableHead><Bot className="inline h-4 w-4 mr-1" />Agente</TableHead>
                     <TableHead>Dispositivo</TableHead>
-                    <TableHead className="text-right">Atendimentos</TableHead>
-                    <TableHead className="text-right"><span className="inline-block h-2 w-2 rounded-full bg-primary mr-1" />Ativas</TableHead>
-                    <TableHead className="text-right">Em conversa</TableHead>
-                    <TableHead className="text-right"><span className="inline-block h-2 w-2 rounded-full bg-warning mr-1" />Pausadas</TableHead>
-                    <TableHead className="text-right"><span className="inline-block h-2 w-2 rounded-full bg-info mr-1" />Transferidas</TableHead>
-                    <TableHead className="text-right">Transf. IA</TableHead>
+                    <TableHead className="text-right">Conversas</TableHead>
+                    <TableHead className="text-right">Pausa Inbox</TableHead>
                     <TableHead className="text-right">Pausa IA</TableHead>
-                    <TableHead className="text-right">Pausa humano</TableHead>
                     <TableHead className="text-right">Agendamentos</TableHead>
-                    <TableHead className="text-right">% Resolução</TableHead>
+                    <TableHead className="text-right">% Resolução IA</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={12} className="text-center py-8">Carregando…</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8">Carregando…</TableCell></TableRow>
                   ) : rows.length === 0 ? (
-                    <TableRow><TableCell colSpan={12} className="text-center py-8 text-muted-foreground">Sem dados no período.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Sem dados no período.</TableCell></TableRow>
                   ) : rows.map((r) => (
                     <TableRow key={r.agent_id}>
                       <TableCell className="font-medium">{r.agent_name}</TableCell>
                       <TableCell className="text-muted-foreground">{r.device_name ?? '—'}</TableCell>
                       <TableCell className="text-right">{r.attendances}</TableCell>
-                      <TableCell className="text-right">{r.active_count}</TableCell>
-                      <TableCell className="text-right">{r.replied_count}</TableCell>
-                      <TableCell className="text-right">{r.paused_count}</TableCell>
-                      <TableCell className="text-right">{r.transferred_count}</TableCell>
-                      <TableCell className="text-right">{r.ai_transfers}</TableCell>
-                      <TableCell className="text-right">{r.ai_paused}</TableCell>
                       <TableCell className="text-right">{r.human_paused}</TableCell>
+                      <TableCell className="text-right">{r.ai_paused}</TableCell>
                       <TableCell className="text-right">{r.appointments}</TableCell>
                       <TableCell className="text-right font-semibold">{r.resolution_pct}%</TableCell>
                     </TableRow>
