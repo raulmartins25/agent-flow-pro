@@ -208,6 +208,10 @@ export function useReports(filters: ReportFilters) {
         human_paused: 0,
         appointments: 0,
         resolution_pct: 0,
+        active_count: 0,
+        replied_count: 0,
+        paused_count: 0,
+        transferred_count: 0,
       };
       for (const r of rowsArr) {
         t.attendances += r.attendances;
@@ -215,6 +219,10 @@ export function useReports(filters: ReportFilters) {
         t.ai_paused += r.ai_paused;
         t.human_paused += r.human_paused;
         t.appointments += r.appointments;
+        t.active_count += r.active_count;
+        t.replied_count += r.replied_count;
+        t.paused_count += r.paused_count;
+        t.transferred_count += r.transferred_count;
       }
       const denom = t.attendances - t.human_paused;
       t.resolution_pct = denom > 0 ? Math.round(((t.ai_transfers + t.appointments) / denom) * 100) : 0;
