@@ -153,6 +153,10 @@ export default function ReportsPage() {
                     <TableHead><Bot className="inline h-4 w-4 mr-1" />Agente</TableHead>
                     <TableHead>Dispositivo</TableHead>
                     <TableHead className="text-right">Atendimentos</TableHead>
+                    <TableHead className="text-right"><span className="inline-block h-2 w-2 rounded-full bg-primary mr-1" />Ativas</TableHead>
+                    <TableHead className="text-right">Em conversa</TableHead>
+                    <TableHead className="text-right"><span className="inline-block h-2 w-2 rounded-full bg-warning mr-1" />Pausadas</TableHead>
+                    <TableHead className="text-right"><span className="inline-block h-2 w-2 rounded-full bg-info mr-1" />Transferidas</TableHead>
                     <TableHead className="text-right">Transf. IA</TableHead>
                     <TableHead className="text-right">Pausa IA</TableHead>
                     <TableHead className="text-right">Pausa humano</TableHead>
@@ -162,14 +166,18 @@ export default function ReportsPage() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8">Carregando…</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={12} className="text-center py-8">Carregando…</TableCell></TableRow>
                   ) : rows.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Sem dados no período.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={12} className="text-center py-8 text-muted-foreground">Sem dados no período.</TableCell></TableRow>
                   ) : rows.map((r) => (
                     <TableRow key={r.agent_id}>
                       <TableCell className="font-medium">{r.agent_name}</TableCell>
                       <TableCell className="text-muted-foreground">{r.device_name ?? '—'}</TableCell>
                       <TableCell className="text-right">{r.attendances}</TableCell>
+                      <TableCell className="text-right">{r.active_count}</TableCell>
+                      <TableCell className="text-right">{r.replied_count}</TableCell>
+                      <TableCell className="text-right">{r.paused_count}</TableCell>
+                      <TableCell className="text-right">{r.transferred_count}</TableCell>
                       <TableCell className="text-right">{r.ai_transfers}</TableCell>
                       <TableCell className="text-right">{r.ai_paused}</TableCell>
                       <TableCell className="text-right">{r.human_paused}</TableCell>
