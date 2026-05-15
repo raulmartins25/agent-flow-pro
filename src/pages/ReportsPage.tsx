@@ -1,22 +1,45 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Bot, MessageSquare, Hand, UserCheck, CalendarCheck, TrendingUp, Download, Info } from 'lucide-react';
+import { Bot, MessageSquare, Hand, UserCheck, CalendarCheck, TrendingUp, Download, Info, FileText } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { useReports, type ReportFilters } from '@/hooks/useReports';
 import { exportReportCSV } from '@/lib/reportsExport';
+import { exportOverviewPDF } from '@/lib/reportsPdf';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Navigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 export default function ReportsPage() {
   const { isClient, loading: roleLoading } = useUserRole();
   const [filters, setFilters] = useState<ReportFilters>({ period: '30d', agentId: 'all', deviceId: 'all' });
   const { rows, totals, daily, agents, devices, loading } = useReports(filters);
+  const overviewRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const periodLabel = filters.period === 'today' ? 'Hoje' : filters.period === '7d' ? 'Últimos 7 dias' : 'Últimos 30 dias';
+  const agentLabel = !filters.agentId || filters.agentId === 'all' ? 'Todos' : (agents.find(a => a.id === filters.agentId)?.name ?? '—');
+  const deviceLabel = !filters.deviceId || filters.deviceId === 'all' ? 'Todos' : (devices.find(d => d.id === filters.deviceId)?.name ?? '—');
+
+  const handleExportPDF = async () => {
+    if (!overviewRef.current) return;
+    setExporting(true);
+    try {
+      await exportOverviewPDF(overviewRef.current, { periodLabel, agentLabel, deviceLabel });
+      toast.success('Relatório PDF gerado');
+    } catch (e) {
+      console.error(e);
+      toast.error('Erro ao gerar PDF');
+    } finally {
+      setExporting(false);
+    }
+  };
+
 
   const kpis = useMemo(
     () => [
@@ -120,6 +143,12 @@ export default function ReportsPage() {
             </div>
           ) : (
             <>
+              <div className="flex justify-end">
+                <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={exporting}>
+                  <FileText className="mr-2 h-4 w-4" /> {exporting ? 'Gerando…' : 'Exportar PDF'}
+                </Button>
+              </div>
+              <div ref={overviewRef} className="space-y-6 bg-background p-2">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {kpis.map((card) => (
                   <Card key={card.title}>
@@ -178,6 +207,7 @@ export default function ReportsPage() {
                   </p>
                 </AlertDescription>
               </Alert>
+              </div>
             </>
           )}
         </TabsContent>
