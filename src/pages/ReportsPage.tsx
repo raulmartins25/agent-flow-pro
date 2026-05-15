@@ -143,6 +143,12 @@ export default function ReportsPage() {
             </div>
           ) : (
             <>
+              <div className="flex justify-end">
+                <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={exporting}>
+                  <FileText className="mr-2 h-4 w-4" /> {exporting ? 'Gerando…' : 'Exportar PDF'}
+                </Button>
+              </div>
+              <div ref={overviewRef} className="space-y-6 bg-background p-2">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {kpis.map((card) => (
                   <Card key={card.title}>
