@@ -132,42 +132,42 @@ export default function ReportsPage() {
               </SelectContent>
             </Select>
           </div>
-          {filters.period === 'custom' && (
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Intervalo</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-64 justify-start font-normal">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {filters.from && filters.to
-                      ? `${format(filters.from, 'dd/MM/yyyy')} – ${format(filters.to, 'dd/MM/yyyy')}`
-                      : 'Selecionar datas'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="range"
-                    locale={ptBR}
-                    numberOfMonths={2}
-                    defaultMonth={filters.from}
-                    selected={{ from: filters.from, to: filters.to } as DateRange}
-                    onSelect={(range) => {
-                      const from = range?.from;
-                      const to = range?.to ?? range?.from;
-                      if (from) {
-                        const end = new Date(to ?? from);
-                        end.setHours(23, 59, 59, 999);
-                        const start = new Date(from);
-                        start.setHours(0, 0, 0, 0);
-                        setFilters({ ...filters, period: 'custom', from: start, to: end });
-                      }
-                    }}
-                    disabled={(d) => d > new Date()}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-          )}
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Intervalo personalizado</label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-64 justify-start font-normal">
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {filters.period === 'custom' && filters.from && filters.to
+                    ? `${format(filters.from, 'dd/MM/yyyy')} – ${format(filters.to, 'dd/MM/yyyy')}`
+                    : 'Selecionar datas'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+                <Calendar
+                  mode="range"
+                  locale={ptBR}
+                  numberOfMonths={2}
+                  defaultMonth={filters.from ?? new Date()}
+                  selected={{ from: filters.from, to: filters.to } as DateRange}
+                  onSelect={(range) => {
+                    const from = range?.from;
+                    const to = range?.to ?? range?.from;
+                    if (from) {
+                      const end = new Date(to ?? from);
+                      end.setHours(23, 59, 59, 999);
+                      const start = new Date(from);
+                      start.setHours(0, 0, 0, 0);
+                      setFilters({ ...filters, period: 'custom', from: start, to: end });
+                    }
+                  }}
+                  disabled={(d) => d > new Date()}
+                  className="p-3 pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Agente</label>
             <Select value={filters.agentId} onValueChange={(v) => setFilters({ ...filters, agentId: v })}>
