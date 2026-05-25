@@ -27,7 +27,13 @@ export default function ReportsPage() {
   const overviewRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
 
-  const periodLabel = filters.period === 'today' ? 'Hoje' : filters.period === '7d' ? 'Últimos 7 dias' : 'Últimos 30 dias';
+  const periodLabel =
+    filters.period === 'today' ? 'Hoje'
+    : filters.period === '7d' ? 'Últimos 7 dias'
+    : filters.period === '30d' ? 'Últimos 30 dias'
+    : (filters.from && filters.to)
+      ? `${format(filters.from, 'dd/MM/yyyy')} – ${format(filters.to, 'dd/MM/yyyy')}`
+      : 'Personalizado';
   const agentLabel = !filters.agentId || filters.agentId === 'all' ? 'Todos' : (agents.find(a => a.id === filters.agentId)?.name ?? '—');
   const deviceLabel = !filters.deviceId || filters.deviceId === 'all' ? 'Todos' : (devices.find(d => d.id === filters.deviceId)?.name ?? '—');
 
