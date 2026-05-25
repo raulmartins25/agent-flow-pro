@@ -109,15 +109,65 @@ export default function ReportsPage() {
         <CardContent className="pt-6 flex flex-wrap gap-3 items-end">
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Período</label>
-            <Select value={filters.period} onValueChange={(v) => setFilters({ ...filters, period: v as any })}>
+            <Select
+              value={filters.period}
+              onValueChange={(v) => {
+                const period = v as ReportFilters['period'];
+                if (period === 'custom') {
+                  const to = new Date();
+                  const from = new Date();
+                  from.setDate(from.getDate() - 6);
+                  setFilters({ ...filters, period, from: filters.from ?? from, to: filters.to ?? to });
+                } else {
+                  setFilters({ ...filters, period, from: undefined, to: undefined });
+                }
+              }}
+            >
               <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="today">Hoje</SelectItem>
                 <SelectItem value="7d">Últimos 7 dias</SelectItem>
                 <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                <SelectItem value="custom">Personalizado</SelectItem>
               </SelectContent>
             </Select>
           </div>
+          {filters.period === 'custom' && (
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Intervalo</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-64 justify-start font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {filters.from && filters.to
+                      ? `${format(filters.from, 'dd/MM/yyyy')} – ${format(filters.to, 'dd/MM/yyyy')}`
+                      : 'Selecionar datas'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="range"
+                    locale={ptBR}
+                    numberOfMonths={2}
+                    defaultMonth={filters.from}
+                    selected={{ from: filters.from, to: filters.to } as DateRange}
+                    onSelect={(range) => {
+                      const from = range?.from;
+                      const to = range?.to ?? range?.from;
+                      if (from) {
+                        const end = new Date(to ?? from);
+                        end.setHours(23, 59, 59, 999);
+                        const start = new Date(from);
+                        start.setHours(0, 0, 0, 0);
+                        setFilters({ ...filters, period: 'custom', from: start, to: end });
+                      }
+                    }}
+                    disabled={(d) => d > new Date()}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          )}
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Agente</label>
             <Select value={filters.agentId} onValueChange={(v) => setFilters({ ...filters, agentId: v })}>
