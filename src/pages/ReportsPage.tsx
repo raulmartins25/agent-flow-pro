@@ -4,16 +4,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Bot, MessageSquare, Hand, UserCheck, CalendarCheck, TrendingUp, Download, Info, FileText } from 'lucide-react';
+import { Bot, MessageSquare, Hand, UserCheck, CalendarCheck, TrendingUp, Download, Info, FileText, CalendarIcon } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { useReports, type ReportFilters } from '@/hooks/useReports';
 import { exportReportCSV } from '@/lib/reportsExport';
 import { exportOverviewPDF } from '@/lib/reportsPdf';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import type { DateRange } from 'react-day-picker';
 
 export default function ReportsPage() {
   const { isClient, loading: roleLoading } = useUserRole();
