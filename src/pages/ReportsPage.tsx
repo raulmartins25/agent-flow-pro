@@ -4,16 +4,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Bot, MessageSquare, Hand, UserCheck, CalendarCheck, TrendingUp, Download, Info, FileText } from 'lucide-react';
+import { Bot, MessageSquare, Hand, UserCheck, CalendarCheck, TrendingUp, Download, Info, FileText, CalendarIcon } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { useReports, type ReportFilters } from '@/hooks/useReports';
 import { exportReportCSV } from '@/lib/reportsExport';
 import { exportOverviewPDF } from '@/lib/reportsPdf';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import type { DateRange } from 'react-day-picker';
 
 export default function ReportsPage() {
   const { isClient, loading: roleLoading } = useUserRole();
@@ -22,7 +27,13 @@ export default function ReportsPage() {
   const overviewRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
 
-  const periodLabel = filters.period === 'today' ? 'Hoje' : filters.period === '7d' ? 'Últimos 7 dias' : 'Últimos 30 dias';
+  const periodLabel =
+    filters.period === 'today' ? 'Hoje'
+    : filters.period === '7d' ? 'Últimos 7 dias'
+    : filters.period === '30d' ? 'Últimos 30 dias'
+    : (filters.from && filters.to)
+      ? `${format(filters.from, 'dd/MM/yyyy')} – ${format(filters.to, 'dd/MM/yyyy')}`
+      : 'Personalizado';
   const agentLabel = !filters.agentId || filters.agentId === 'all' ? 'Todos' : (agents.find(a => a.id === filters.agentId)?.name ?? '—');
   const deviceLabel = !filters.deviceId || filters.deviceId === 'all' ? 'Todos' : (devices.find(d => d.id === filters.deviceId)?.name ?? '—');
 
@@ -98,15 +109,65 @@ export default function ReportsPage() {
         <CardContent className="pt-6 flex flex-wrap gap-3 items-end">
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Período</label>
-            <Select value={filters.period} onValueChange={(v) => setFilters({ ...filters, period: v as any })}>
+            <Select
+              value={filters.period}
+              onValueChange={(v) => {
+                const period = v as ReportFilters['period'];
+                if (period === 'custom') {
+                  const to = new Date();
+                  const from = new Date();
+                  from.setDate(from.getDate() - 6);
+                  setFilters({ ...filters, period, from: filters.from ?? from, to: filters.to ?? to });
+                } else {
+                  setFilters({ ...filters, period, from: undefined, to: undefined });
+                }
+              }}
+            >
               <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="today">Hoje</SelectItem>
                 <SelectItem value="7d">Últimos 7 dias</SelectItem>
                 <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                <SelectItem value="custom">Personalizado</SelectItem>
               </SelectContent>
             </Select>
           </div>
+          {filters.period === 'custom' && (
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Intervalo</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-64 justify-start font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {filters.from && filters.to
+                      ? `${format(filters.from, 'dd/MM/yyyy')} – ${format(filters.to, 'dd/MM/yyyy')}`
+                      : 'Selecionar datas'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="range"
+                    locale={ptBR}
+                    numberOfMonths={2}
+                    defaultMonth={filters.from}
+                    selected={{ from: filters.from, to: filters.to } as DateRange}
+                    onSelect={(range) => {
+                      const from = range?.from;
+                      const to = range?.to ?? range?.from;
+                      if (from) {
+                        const end = new Date(to ?? from);
+                        end.setHours(23, 59, 59, 999);
+                        const start = new Date(from);
+                        start.setHours(0, 0, 0, 0);
+                        setFilters({ ...filters, period: 'custom', from: start, to: end });
+                      }
+                    }}
+                    disabled={(d) => d > new Date()}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          )}
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Agente</label>
             <Select value={filters.agentId} onValueChange={(v) => setFilters({ ...filters, agentId: v })}>
