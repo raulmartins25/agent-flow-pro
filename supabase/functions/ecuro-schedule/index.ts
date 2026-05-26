@@ -46,12 +46,74 @@ Deno.serve(async (req) => {
       specialty_id: string;
       default_duration?: number;
       environment?: 'dev' | 'prod';
+      business_hours?: any;
     };
     const env = cfg.environment === 'prod' ? 'prod' : 'dev';
     const duration = cfg.default_duration || 30;
+    const businessHours = normalizeBusinessHours(cfg.business_hours);
 
     const start = new Date(start_time);
     const end = end_time ? new Date(end_time) : new Date(start.getTime() + duration * 60000);
+
+    // GUARD 1 — respect clinic business hours (server-side trava contra alucinações do LLM)
+    if (!isWithinBusinessHours(start.toISOString(), businessHours)) {
+      const msg = 'Horário fora do expediente da clínica. Consulte a disponibilidade novamente e ofereça apenas horários retornados pela ferramenta get_availability.';
+      if (conversation_id) {
+        await supabase.from('messages').insert({
+          conversation_id, role: 'system',
+          content: `[Ecuro] BLOQUEADO: tentativa de agendar ${start.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} fora do expediente.`,
+        });
+      }
+      return new Response(JSON.stringify({ success: false, error: 'outside_business_hours', message: msg }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // GUARD 2 — confirmar que o start_time corresponde a um slot realmente ofertado pela Ecuro
+    try {
+      const { date: brDate } = brParts(start.toISOString());
+      const qs = new URLSearchParams({
+        clinicId: cfg.clinic_id,
+        specialtyId: cfg.specialty_id,
+        startDate: brDate,
+        endDate: brDate,
+      }).toString();
+      const availRes = await ecuroFetch(env, `/specialty-availability?${qs}`, { method: 'GET' });
+      if (availRes.ok) {
+        const availText = await availRes.text();
+        let availData: any; try { availData = JSON.parse(availText); } catch { availData = null; }
+        const dates = availData?.data?.dates || availData?.dates || [];
+        const wantedMin = brParts(start.toISOString()).minutes;
+        let matched = false;
+        for (const d of dates) {
+          if (d?.date !== brDate) continue;
+          for (const h of (d.hours || [])) {
+            const m = String(h?.start || '').match(/(\d{1,2}):(\d{2})/);
+            if (!m) continue;
+            const slotMin = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+            if (slotMin === wantedMin) { matched = true; break; }
+          }
+          if (matched) break;
+        }
+        if (!matched) {
+          const msg = 'Horário não está disponível na agenda da clínica. Chame get_availability novamente e ofereça SOMENTE os slots retornados.';
+          if (conversation_id) {
+            await supabase.from('messages').insert({
+              conversation_id, role: 'system',
+              content: `[Ecuro] BLOQUEADO: ${start.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} não bate com nenhum slot ofertado para ${brDate}.`,
+            });
+          }
+          return new Response(JSON.stringify({ success: false, error: 'slot_not_offered', message: msg }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+    } catch (e) {
+      console.error('[ecuro-schedule] availability cross-check failed', e);
+      // não bloqueia em caso de falha do cross-check; business_hours já protegeu acima
+    }
+
+
 
     const cfgAny2 = cfg as any;
     const payload = {
