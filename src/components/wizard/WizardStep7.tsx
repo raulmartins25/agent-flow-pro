@@ -218,6 +218,8 @@ export function WizardStep7() {
               </Select>
             </div>
 
+            <BusinessHoursEditor />
+
             {wizardData.ecuro_clinic_id && wizardData.ecuro_specialty_id && (
               <div className="rounded-lg bg-muted/40 p-3 text-xs space-y-1">
                 <p className="flex items-center gap-1 text-primary">
@@ -226,12 +228,104 @@ export function WizardStep7() {
                 <p><strong>Clínica:</strong> {wizardData.ecuro_clinic_name}</p>
                 <p><strong>Especialidade:</strong> {wizardData.ecuro_specialty_name}</p>
                 <p><strong>Ambiente:</strong> {wizardData.ecuro_environment === 'prod' ? 'Produção' : 'Teste (dev)'}</p>
-                <p className="text-muted-foreground italic mt-2">A IA usará essas configurações para verificar disponibilidade e criar agendamentos automaticamente.</p>
+                <p className="text-muted-foreground italic mt-2">A IA usará essas configurações para verificar disponibilidade e criar agendamentos automaticamente. Horários fora do expediente são bloqueados no servidor.</p>
               </div>
             )}
           </CardContent>
         )}
       </Card>
+    </div>
+  );
+}
+
+const WEEKDAYS = [
+  { idx: '1', label: 'Segunda' },
+  { idx: '2', label: 'Terça' },
+  { idx: '3', label: 'Quarta' },
+  { idx: '4', label: 'Quinta' },
+  { idx: '5', label: 'Sexta' },
+  { idx: '6', label: 'Sábado' },
+  { idx: '0', label: 'Domingo' },
+];
+
+function BusinessHoursEditor() {
+  const { wizardData, updateWizardData } = useAgentStore();
+  const bh = wizardData.ecuro_business_hours || {};
+
+  const setDay = (idx: string, intervals: Array<{ open: string; close: string }> | null) => {
+    updateWizardData({ ecuro_business_hours: { ...bh, [idx]: intervals } });
+  };
+
+  return (
+    <div className="space-y-2 rounded-lg border p-3">
+      <div>
+        <Label className="text-xs">Horário de funcionamento da clínica</Label>
+        <p className="text-[11px] text-muted-foreground">
+          A IA só oferecerá e confirmará agendamentos dentro destes horários. Horários fora da janela são bloqueados automaticamente.
+        </p>
+      </div>
+      <div className="space-y-2">
+        {WEEKDAYS.map(({ idx, label }) => {
+          const intervals = bh[idx];
+          const closed = !intervals || intervals.length === 0;
+          return (
+            <div key={idx} className="flex items-center gap-2 text-sm">
+              <div className="w-20 text-xs">{label}</div>
+              <Switch
+                checked={!closed}
+                onCheckedChange={(v) => setDay(idx, v ? [{ open: '08:00', close: '18:00' }] : null)}
+              />
+              {closed ? (
+                <span className="text-xs text-muted-foreground">Fechado</span>
+              ) : (
+                <div className="flex flex-col gap-1 flex-1">
+                  {intervals!.map((iv, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <Input
+                        type="time"
+                        value={iv.open}
+                        className="h-7 w-24 text-xs"
+                        onChange={(e) => {
+                          const next = [...intervals!];
+                          next[i] = { ...next[i], open: e.target.value };
+                          setDay(idx, next);
+                        }}
+                      />
+                      <span className="text-xs">às</span>
+                      <Input
+                        type="time"
+                        value={iv.close}
+                        className="h-7 w-24 text-xs"
+                        onChange={(e) => {
+                          const next = [...intervals!];
+                          next[i] = { ...next[i], close: e.target.value };
+                          setDay(idx, next);
+                        }}
+                      />
+                      {intervals!.length > 1 && (
+                        <Button
+                          variant="ghost" size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setDay(idx, intervals!.filter((_, j) => j !== i))}
+                        >
+                          ✕
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  <Button
+                    variant="ghost" size="sm"
+                    className="h-6 self-start text-[11px] text-muted-foreground"
+                    onClick={() => setDay(idx, [...intervals!, { open: '13:00', close: '18:00' }])}
+                  >
+                    + intervalo
+                  </Button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
