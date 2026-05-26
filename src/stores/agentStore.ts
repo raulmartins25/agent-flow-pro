@@ -50,6 +50,7 @@ interface AgentWizardData {
   ecuro_specialty_id: string;
   ecuro_specialty_name: string;
   ecuro_default_duration: number;
+  ecuro_business_hours: Record<string, Array<{ open: string; close: string }> | null>;
   // Advanced
   custom_prompt_enabled: boolean;
   custom_prompt: string;
@@ -102,6 +103,15 @@ const initialWizardData: AgentWizardData = {
   ecuro_specialty_id: '',
   ecuro_specialty_name: '',
   ecuro_default_duration: 30,
+  ecuro_business_hours: {
+    '0': null,
+    '1': [{ open: '08:00', close: '18:00' }],
+    '2': [{ open: '08:00', close: '18:00' }],
+    '3': [{ open: '08:00', close: '18:00' }],
+    '4': [{ open: '08:00', close: '18:00' }],
+    '5': [{ open: '08:00', close: '18:00' }],
+    '6': [{ open: '08:00', close: '12:00' }],
+  },
   custom_prompt_enabled: false,
   custom_prompt: '',
 };
