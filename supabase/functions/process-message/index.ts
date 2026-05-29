@@ -599,7 +599,20 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
       let t = text.replace(/\r\n/g, "\n");
       t = t.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\r/g, "\n");
       t = t.replace(/\n{3,}/g, "\n\n");
-      t = t.replace(/([^\n])\s+(?=(?:📅|⏰|📍|✅|💛|🎯|🗓️|🕐|📌))/gu, "$1\n\n");
+      t = t.replace(/([^\n])[ \t]+(?=(?:📅|⏰|📍|✅|💛|🎯|🗓️|🕐|📌))/gu, "$1\n\n");
+
+      // Fallback: se o LLM devolveu tudo em um único bloco (sem \n\n) e o texto
+      // tem várias frases, quebra em parágrafos após pontuação forte.
+      // Usa [ \t] apenas — nunca \s — para não comer quebras de linha reais.
+      if (!t.includes("\n\n") && t.length > 120) {
+        const boundary = /([.!?…])[ \t]+(?=[A-Za-zÀ-ÿ\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}])/gu;
+        if ((t.match(boundary) || []).length >= 1) {
+          t = t.replace(boundary, "$1\n\n");
+          // Reagrupa fragmento inicial muito curto (ex.: "Olá! 👋") com o próximo parágrafo
+          t = t.replace(/^([^\n]{1,20}[.!?…])\n\n/u, "$1 ");
+        }
+      }
+
       // Replace any hallucinated short URLs (goo.gl/bit.ly/tinyurl) with the configured maps URL when available
       const cfgMaps = (ecuroIntegration?.config as any)?.maps_url;
       if (cfgMaps) {
