@@ -239,9 +239,9 @@ export default function ReportsPage() {
                 <Button
                   size="sm"
                   onClick={handleAdvancedReport}
-                  disabled={generatingAdvanced || !selectedAgent}
+                  disabled={generatingAdvanced}
                   className="bg-gradient-to-r from-[hsl(225,82%,52%)] to-[hsl(263,80%,57%)] text-white hover:opacity-90"
-                  title={!selectedAgent ? 'Selecione um agente no filtro' : 'Análise profunda por IA das conversas'}
+                  title={!selectedAgent ? 'Selecione um agente específico no filtro Agente' : 'Análise profunda por IA das conversas'}
                 >
                   <Sparkles className="mr-2 h-4 w-4" /> {generatingAdvanced ? 'Analisando…' : 'Relatório Avançado IA'}
                 </Button>
