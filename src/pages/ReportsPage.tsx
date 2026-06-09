@@ -235,7 +235,16 @@ export default function ReportsPage() {
             </div>
           ) : (
             <>
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2 flex-wrap">
+                <Button
+                  size="sm"
+                  onClick={handleAdvancedReport}
+                  disabled={generatingAdvanced || !selectedAgent}
+                  className="bg-gradient-to-r from-[hsl(225,82%,52%)] to-[hsl(263,80%,57%)] text-white hover:opacity-90"
+                  title={!selectedAgent ? 'Selecione um agente no filtro' : 'Análise profunda por IA das conversas'}
+                >
+                  <Sparkles className="mr-2 h-4 w-4" /> {generatingAdvanced ? 'Analisando…' : 'Relatório Avançado IA'}
+                </Button>
                 <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={exporting}>
                   <FileText className="mr-2 h-4 w-4" /> {exporting ? 'Gerando…' : 'Exportar PDF'}
                 </Button>
