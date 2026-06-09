@@ -1,57 +1,48 @@
-# Bug: Jordana agendou 16:15 num sábado (clínica fecha 14:00)
+## Relatório Avançado da Jordana — análise por IA
 
-## Diagnóstico
+Objetivo: gerar um PDF executivo para você apresentar ao cliente (advogado), mostrando desempenho real da Jordana, com números, exemplos de conversas e recomendações de melhoria — material persuasivo para ele continuar com o serviço.
 
-Na conversa anexada:
-1. Jordana ofereceu **08:30 ou 13:15** (vindos do `get_availability`).
-2. Paciente respondeu **"As 13hs e 15, é melhor"**.
-3. Jordana chamou `schedule_appointment` com `start_time = 16:15` — horário que **nunca foi oferecido** e que está **fora do expediente de sábado**.
+### Escopo dos dados (já levantado)
+- Período: 05/05/2026 → 09/06/2026
+- 301 conversas, 299 contatos únicos
+- 83 transferidas pela IA, 81 pausadas
+- 58 agendamentos confirmados
+- Taxa de resolução (agend. + transf.) ≈ 47%
 
-Duas falhas se somam:
+### Estrutura do PDF (8–10 páginas, marca 2M Digital)
 
-- **A. Sem trava de horário comercial.** A integração Ecuro hoje devolve qualquer slot que a API retornar. Não há `business_hours` configurável por dia da semana, então 16:15 de sábado pode passar adiante se a Ecuro tiver agenda aberta lá.
-- **B. Sem validação do `start_time` no servidor.** `ecuro-schedule` aceita cegamente o ISO que o LLM mandar. Quando o modelo "alucina" (13:15 → 16:15, comum quando o histórico fica longo e ele perde o slot ISO original), nada barra.
+1. **Capa** — logo 2M Digital, nome do cliente, período analisado, "Relatório de Desempenho — Agente Jordana".
+2. **Resumo executivo (1 página)** — 4–5 bullets de alto nível: volume atendido, % resolvida, agendamentos gerados, tempo economizado estimado, ROI percebido.
+3. **KPIs principais** — cards visuais: conversas, contatos únicos, agendamentos, transferências, taxa de resolução, tempo médio de resposta, horário de pico.
+4. **Análise qualitativa por IA** (núcleo do relatório) — usando Lovable AI (Gemini) sobre uma amostra estratificada das conversas:
+   - O que a IA está acertando (tom, qualificação, agendamento)
+   - Onde está perdendo o lead (objeções não tratadas, dúvidas recorrentes, momentos de fricção)
+   - Padrões de objeções mais comuns (top 5)
+   - Perguntas frequentes que poderiam virar resposta automática
+5. **Funil de atendimento** — gráfico: contatos → qualificados → agendados → transferidos → perdidos.
+6. **Trechos reais anonimizados** — 3–4 exemplos de conversas bem resolvidas e 2 que precisariam ajuste (nomes mascarados).
+7. **Recomendações práticas** — lista priorizada (alto/médio/baixo impacto) com ação concreta para cada ponto fraco.
+8. **Próximos passos / proposta de continuidade** — sugestão de evolução (treinar IA com novos padrões, adicionar follow-up X, expandir para Y).
 
-O prompt já manda "use o ISO exato retornado por get_availability", mas instrução de prompt não é garantia — precisa de verificação determinística.
+### Como será gerado (técnico)
 
-## O que vou implementar
+- Novo edge function `jordana-report` que:
+  1. Lê todas as conversas + mensagens da Jordana no período.
+  2. Calcula KPIs agregados (SQL).
+  3. Faz amostragem estratificada (~40 conversas: 15 agendadas, 10 transferidas, 10 perdidas/abandonadas, 5 longas).
+  4. Chama Lovable AI (`google/gemini-2.5-pro`) com prompt estruturado pedindo JSON com: pontos fortes, fraquezas, top objeções, FAQs, exemplos comentados, recomendações.
+  5. Retorna JSON consolidado.
+- Frontend: nova rota `/relatorio-avancado/jordana` (ou botão "Gerar relatório avançado" em Relatórios) que chama a function e renderiza o PDF via `jsPDF` reusando o estilo de marca já existente em `src/lib/reportsPdf.ts` (cores 2M Digital, header com logo, footer com gradiente).
+- Anonimização: nomes/telefones mascarados nos trechos citados (primeiro nome + iniciais, telefone `(11) ****-1234`).
+- Salva PDF localmente no navegador (download) — sem armazenar no Storage.
 
-### 1. Config de horário de funcionamento por agente
-- Adicionar `business_hours` ao `config` JSONB de `agent_integrations` (provider `ecuro`). Estrutura:
-  ```
-  business_hours: {
-    "0": null,                                 // dom fechado
-    "1": [{ open: "08:00", close: "18:00" }],  // seg
-    ...
-    "6": [{ open: "08:00", close: "14:00" }]   // sáb
-  }
-  ```
-- Editor na página de integração Ecuro do agente (uma linha por dia da semana com toggle "fechado" e inputs open/close; permite múltiplos intervalos para almoço).
+### Custo / tempo
+- 1 geração ≈ 1 chamada Gemini Pro com ~50k tokens entrada / ~5k saída.
+- Tempo de geração: 30–60s (loading state no botão).
 
-### 2. Filtro determinístico em `ecuro-availability`
-- Ler `business_hours` do config.
-- Antes de devolver os slots, descartar qualquer `start` cujo HH:MM (em America/Sao_Paulo) caia fora dos intervalos do dia da semana correspondente. Assim o LLM nunca vê 16:15 de sábado.
+### Fora do escopo
+- Não cria página recorrente automática.
+- Não envia por e-mail.
+- Não altera dados de conversas/agentes.
 
-### 3. Validação em `ecuro-schedule`
-- Antes de chamar a Ecuro para criar:
-  1. Re-checar `business_hours` para o `start_time` recebido — se fora do expediente, retornar `400 { error: "outside_business_hours" }`.
-  2. Buscar disponibilidade do dia e confirmar que o `start_time` (HH:MM + data) bate com algum slot retornado. Se não bater, retornar `400 { error: "slot_not_offered" }`.
-- O `process-message` repassa o erro como `tool_result` para o LLM, que então pede desculpas e oferece os slots reais novamente (sem criar nada).
-
-### 4. Reforço no prompt
-- Em `compilePrompt.ts`, deixar explícito: "Ao chamar `schedule_appointment`, copie o `start` (ISO) do slot exato — proibido inferir, somar minutos ou reescrever a hora. Se em dúvida, chame `get_availability` de novo antes."
-
-## Arquivos afetados
-
-- `supabase/migrations/<novo>.sql` — nada de schema; config vive no JSONB existente.
-- `supabase/functions/ecuro-availability/index.ts` — aplicar filtro `business_hours`.
-- `supabase/functions/ecuro-schedule/index.ts` — validar `start_time` contra `business_hours` e contra slots ofertados.
-- `supabase/functions/_shared/ecuro.ts` — helper `isWithinBusinessHours(iso, businessHours)`.
-- `src/pages/AgentWizard.tsx` ou a tela onde a integração Ecuro é configurada (verificar qual) — UI do horário de funcionamento.
-- `src/lib/compilePrompt.ts` — reforçar instrução do ISO.
-
-## Detalhes técnicos
-
-- Comparação de horário sempre em `America/Sao_Paulo` via `Intl.DateTimeFormat` com `timeZone`, nunca em UTC bruto, para evitar deslocamento de fuso.
-- `business_hours` opcional: se ausente, comportamento atual é mantido (sem filtro), para não quebrar agentes já configurados.
-- Mensagem de erro do `ecuro-schedule` é em PT-BR amigável para o LLM repetir ao paciente.
+Se aprovar, parto para implementação.
