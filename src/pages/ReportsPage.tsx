@@ -13,9 +13,12 @@ import { Calendar } from '@/components/ui/calendar';
 import { useReports, type ReportFilters } from '@/hooks/useReports';
 import { exportReportCSV } from '@/lib/reportsExport';
 import { exportOverviewPDF } from '@/lib/reportsPdf';
+import { exportAdvancedReportPDF } from '@/lib/advancedReportPdf';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
@@ -26,6 +29,34 @@ export default function ReportsPage() {
   const { rows, totals, daily, agents, devices, loading } = useReports(filters);
   const overviewRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
+  const [generatingAdvanced, setGeneratingAdvanced] = useState(false);
+
+  const selectedAgent = filters.agentId && filters.agentId !== 'all'
+    ? agents.find(a => a.id === filters.agentId)
+    : undefined;
+
+  const handleAdvancedReport = async () => {
+    if (!selectedAgent) {
+      toast.error('Selecione um agente específico no filtro para gerar o relatório avançado.');
+      return;
+    }
+    setGeneratingAdvanced(true);
+    const toastId = toast.loading(`Analisando conversas de ${selectedAgent.name} com IA… (pode levar até 1 min)`);
+    try {
+      const { data, error } = await supabase.functions.invoke('advanced-agent-report', {
+        body: { agentId: selectedAgent.id },
+      });
+      if (error) throw error;
+      if (!data || data.error) throw new Error(data?.error || 'Falha na análise');
+      await exportAdvancedReportPDF(data);
+      toast.success('Relatório avançado gerado!', { id: toastId });
+    } catch (e: any) {
+      console.error(e);
+      toast.error(`Erro: ${e.message ?? e}`, { id: toastId });
+    } finally {
+      setGeneratingAdvanced(false);
+    }
+  };
 
   const periodLabel =
     filters.period === 'today' ? 'Hoje'
