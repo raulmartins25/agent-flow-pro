@@ -79,8 +79,8 @@ Deno.serve(async (req) => {
         conversation_id,
         role: 'system',
         content: res.ok
-          ? `[Ecuro] Agendamento ${appt.external_id} cancelado (PUT /update-appointment)`
-          : `[Ecuro] Falha ao cancelar (${res.status}): ${typeof data === 'string' ? data : JSON.stringify(data)}`,
+          ? `[Ecuro][LOG INTERNO] cancel OK (${appt.external_id})`
+          : `[Ecuro][LOG INTERNO] cancel retornou status ${res.status}`,
       });
     }
 
