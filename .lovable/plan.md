@@ -1,48 +1,43 @@
-## Relatório Avançado da Jordana — análise por IA
+# Ajuste de comportamento — Jordana (objeção de preço)
 
-Objetivo: gerar um PDF executivo para você apresentar ao cliente (advogado), mostrando desempenho real da Jordana, com números, exemplos de conversas e recomendações de melhoria — material persuasivo para ele continuar com o serviço.
+## Problema
+Hoje a Jordana trata QUALQUER pergunta sobre valor como gatilho automático para empurrar a avaliação. Isso aparece em 3 lugares do `agent_config` reforçando o mesmo padrão:
 
-### Escopo dos dados (já levantado)
-- Período: 05/05/2026 → 09/06/2026
-- 301 conversas, 299 contatos únicos
-- 83 transferidas pela IA, 81 pausadas
-- 58 agendamentos confirmados
-- Taxa de resolução (agend. + transf.) ≈ 47%
+1. Regra 4 ("VALORES E DESCONTOS") — bloqueia preço e manda agendar.
+2. `objection_handlers` "Tá caro" / "Quero saber o preço antes" — terminam **sempre** com "Posso agendar?".
+3. "FRASE OBRIGATÓRIA — OBJEÇÃO DE VALOR/PREÇO" — script fixo de venda.
 
-### Estrutura do PDF (8–10 páginas, marca 2M Digital)
+Resultado: leads como Pérola H., Manoel A. e Rose perguntam preço, recebem desvio robótico e abandonam.
 
-1. **Capa** — logo 2M Digital, nome do cliente, período analisado, "Relatório de Desempenho — Agente Jordana".
-2. **Resumo executivo (1 página)** — 4–5 bullets de alto nível: volume atendido, % resolvida, agendamentos gerados, tempo economizado estimado, ROI percebido.
-3. **KPIs principais** — cards visuais: conversas, contatos únicos, agendamentos, transferências, taxa de resolução, tempo médio de resposta, horário de pico.
-4. **Análise qualitativa por IA** (núcleo do relatório) — usando Lovable AI (Gemini) sobre uma amostra estratificada das conversas:
-   - O que a IA está acertando (tom, qualificação, agendamento)
-   - Onde está perdendo o lead (objeções não tratadas, dúvidas recorrentes, momentos de fricção)
-   - Padrões de objeções mais comuns (top 5)
-   - Perguntas frequentes que poderiam virar resposta automática
-5. **Funil de atendimento** — gráfico: contatos → qualificados → agendados → transferidos → perdidos.
-6. **Trechos reais anonimizados** — 3–4 exemplos de conversas bem resolvidas e 2 que precisariam ajuste (nomes mascarados).
-7. **Recomendações práticas** — lista priorizada (alto/médio/baixo impacto) com ação concreta para cada ponto fraco.
-8. **Próximos passos / proposta de continuidade** — sugestão de evolução (treinar IA com novos padrões, adicionar follow-up X, expandir para Y).
+## O que muda (apenas dados — sem código)
+Update no `agent_config` da Jordana (`agent_id = 9d01e0ff-9bf3-4fe5-8979-cd10e692ec6e`). Nenhuma alteração em `compilePrompt.ts`, edge functions, UI ou outros agentes.
 
-### Como será gerado (técnico)
+### 1. Reescrever a Regra 4 ("VALORES E DESCONTOS")
+A IA precisa **acolher** antes de oferecer agendamento. **PROIBIDO citar qualquer valor, faixa, "a partir de", estimativa, "varia entre X e Y" ou número monetário.** Nova diretriz:
 
-- Novo edge function `jordana-report` que:
-  1. Lê todas as conversas + mensagens da Jordana no período.
-  2. Calcula KPIs agregados (SQL).
-  3. Faz amostragem estratificada (~40 conversas: 15 agendadas, 10 transferidas, 10 perdidas/abandonadas, 5 longas).
-  4. Chama Lovable AI (`google/gemini-2.5-pro`) com prompt estruturado pedindo JSON com: pontos fortes, fraquezas, top objeções, FAQs, exemplos comentados, recomendações.
-  5. Retorna JSON consolidado.
-- Frontend: nova rota `/relatorio-avancado/jordana` (ou botão "Gerar relatório avançado" em Relatórios) que chama a function e renderiza o PDF via `jsPDF` reusando o estilo de marca já existente em `src/lib/reportsPdf.ts` (cores 2M Digital, header com logo, footer com gradiente).
-- Anonimização: nomes/telefones mascarados nos trechos citados (primeiro nome + iniciais, telefone `(11) ****-1234`).
-- Salva PDF localmente no navegador (download) — sem armazenar no Storage.
+- Reconhecer a pergunta de forma direta ("ótima pergunta", "faz total sentido querer saber").
+- Explicar **por que** não tem preço fechado: cada caso (quantidade de dentes, tipo de implante, material, complexidade) muda o orçamento — é técnico, não desculpa.
+- **NUNCA** mencionar valor, faixa, mínimo, máximo, "a partir de", "geralmente custa", nem comparações de preço. Se o lead insistir ("me dá só uma ideia", "uma faixa", "mais ou menos"), manter a mesma linha: explicar de novo a variável técnica e reforçar que só o dentista, presencialmente, consegue dar o número certo.
+- **SÓ depois** da explicação, oferecer a avaliação gratuita como caminho para o orçamento exato — **uma vez por turno**.
+- Proibido responder pergunta de preço apenas com "vamos agendar?".
 
-### Custo / tempo
-- 1 geração ≈ 1 chamada Gemini Pro com ~50k tokens entrada / ~5k saída.
-- Tempo de geração: 30–60s (loading state no botão).
+### 2. Reescrever os `objection_handlers` de preço
+- **"Tá caro"** → validar ("entendo, investimento odontológico realmente pesa"), reforçar que existem caminhos de tratamento diferentes para cada caso, **sem citar valor nem parcelamento proativo**. Só então convidar para avaliação.
+- **"Quero saber o preço antes"** → reconhecer a pergunta como legítima, explicar por que o orçamento é personalizado (variáveis técnicas), pedir mais detalhes da queixa para o dentista poder avaliar melhor. **Não dar número, não dar faixa.** Convidar para avaliação no fim.
 
-### Fora do escopo
-- Não cria página recorrente automática.
-- Não envia por e-mail.
-- Não altera dados de conversas/agentes.
+### 3. Remover a "FRASE OBRIGATÓRIA"
+Apagar a regra que força sempre "a boa notícia é que a avaliação é sem custo essa semana...". Ela é o principal motor do desvio robótico. A oferta com escassez na seção "ABORDAGEM DE OFERTA" continua existindo (e já tem critério próprio).
 
-Se aprovar, parto para implementação.
+### 4. Reforçar regra anti-loop
+Adicionar: "Se o lead repetir a pergunta de preço, NÃO repita o convite para agendar nem cite valor. Aprofunde a explicação técnica ou peça mais detalhes da queixa."
+
+## Garantias de não-regressão
+- Mudança escopada por `agent_id` — só Jordana. Outros agentes intactos.
+- Fluxo de qualificação (4 perguntas), Ecuro/agendamento, transferência, anti-ban, regras de convênio/parcelamento permanecem **idênticos**.
+- A oferta com gatilho de escassez ("vagas de avaliação sem custo") continua disponível — apenas deixa de ser resposta automática para preço.
+- Validação após aplicar: rodar `simulate-chat` com 3 cenários — "quanto custa um implante?", "tá caro", "me dá uma faixa de preço" — confirmando que (a) a IA não cita nenhum valor, (b) acolhe e explica antes de convidar, (c) ainda agenda normalmente quando o lead pede.
+
+## Fora de escopo
+- Não altero código.
+- Não mexo em outros agentes.
+- Não cito valores em lugar nenhum do prompt.
