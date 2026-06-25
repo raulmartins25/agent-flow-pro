@@ -28,6 +28,7 @@ const navItems = [
   { title: 'Agendamentos', url: '/appointments', icon: CalendarCheck },
   { title: 'Prospecção', url: '/prospecting', icon: MapPin },
   { title: 'Aquecimento', url: '/warmup', icon: Flame },
+  { title: 'Aquecimento 2', url: '/warmup2', icon: Flame },
   { title: 'Logs', url: '/logs', icon: ScrollText },
   { title: 'Relatórios', url: '/reports', icon: BarChart3 },
   { title: 'Settings', url: '/settings', icon: Settings },

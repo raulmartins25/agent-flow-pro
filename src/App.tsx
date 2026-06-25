@@ -19,6 +19,7 @@ import SimulatorPage from "@/pages/SimulatorPage";
 import PublicSimulatorPage from "@/pages/PublicSimulatorPage";
 import SettingsPage from "@/pages/SettingsPage";
 import ChipWarmupPage from "@/pages/ChipWarmupPage";
+import ChipWarmup2Page from "@/pages/ChipWarmup2Page";
 import DevicesPage from "@/pages/DevicesPage";
 import LogsPage from "@/pages/LogsPage";
 import TransfersPage from "@/pages/TransfersPage";
@@ -63,6 +64,7 @@ const App = () => (
               <Route path="/appointments" element={<AppointmentsPage />} />
               <Route path="/prospecting" element={<ProspectingPage />} />
               <Route path="/warmup" element={<ChipWarmupPage />} />
+              <Route path="/warmup2" element={<ChipWarmup2Page />} />
               <Route path="/logs" element={<LogsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
