@@ -109,6 +109,23 @@ export default function ChipWarmup2Page() {
     onError: (err: Error) => toast.error('Erro ao desconectar', { description: err.message }),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (w: ChipWarmup) => {
+      if (w.status === 'connected' && w.api_url && w.instance_name) {
+        await supabase.functions.invoke('chip-warmup-v2', {
+          body: { action: 'disconnect', url: w.api_url, instancia: w.instance_name },
+        });
+      }
+      const { error } = await supabase.from('chip_warmups').delete().eq('id', w.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Chip removido!');
+      queryClient.invalidateQueries({ queryKey: ['chip-warmups-v2'] });
+    },
+    onError: (err: Error) => toast.error('Erro ao remover', { description: err.message }),
+  });
+
   const resetForm = () => {
     setProvider('evolution');
     setDeviceId('');
