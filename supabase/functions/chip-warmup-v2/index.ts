@@ -107,7 +107,13 @@ Deno.serve(async (req) => {
         flat.includes("já está conectada") ||
         flat.includes("ja está conectada");
 
-      if (!apiRes.ok && !alreadyConnected) {
+      // Maturador às vezes responde {"propertyName":"N"} com status != 2xx,
+      // mas o chip é efetivamente aceito. Tratamos como sucesso.
+      const quirkPropertyName =
+        typeof (apiData as any)?.propertyName !== "undefined" &&
+        Object.keys(apiData as any).length === 1;
+
+      if (!apiRes.ok && !alreadyConnected && !quirkPropertyName) {
         return new Response(JSON.stringify({ error: "Falha no maturador", api_response: apiData }), {
           status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
