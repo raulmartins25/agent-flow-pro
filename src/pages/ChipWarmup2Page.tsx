@@ -254,17 +254,42 @@ export default function ChipWarmup2Page() {
                 {w.instance_name && (
                   <div className="text-sm"><span className="text-muted-foreground">Instância:</span> {w.instance_name}</div>
                 )}
-                <div className="pt-2">
+                <div className="pt-2 flex gap-2">
                   {w.status === 'connected' ? (
-                    <Button variant="destructive" size="sm" className="w-full"
+                    <Button variant="destructive" size="sm" className="flex-1"
                       disabled={disconnectMutation.isPending}
                       onClick={() => disconnectMutation.mutate(w)}>
                       {disconnectMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                       Desconectar
                     </Button>
                   ) : (
-                    <Badge variant="outline">Desconectado</Badge>
+                    <Badge variant="outline" className="flex-1 justify-center">Desconectado</Badge>
                   )}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="sm" title="Remover">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Remover este chip?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {w.status === 'connected'
+                            ? 'O chip será desconectado do maturador e removido da lista.'
+                            : 'O registro será removido da lista.'}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          onClick={() => deleteMutation.mutate(w)}>
+                          Remover
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </CardContent>
             </Card>
