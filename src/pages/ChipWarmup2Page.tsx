@@ -11,8 +11,9 @@ import {
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { Flame, Plus, Power, PowerOff, Loader2, Smartphone, Trash2, Server } from 'lucide-react';
+import { Flame, Plus, Power, PowerOff, Loader2, Smartphone, Trash2, Server, RefreshCw } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -39,39 +40,45 @@ type Device = {
   status: string;
 };
 
-type WarmupEvo = {
+type WarmupServer = {
   id: string;
   label: string;
   evolution_api_url: string;
-  instance_name: string;
   evolution_api_key: string;
 };
 
-// Encodes source into the select value: "device:<id>" or "warmup:<id>"
-const encEvo = (kind: 'device' | 'warmup', id: string) => `${kind}:${id}`;
-const decEvo = (v: string) => {
-  const [kind, ...rest] = v.split(':');
-  return { kind: kind as 'device' | 'warmup', id: rest.join(':') };
+type RemoteInstance = {
+  name: string;
+  status: string | null;
+  number: string | null;
+  profileName: string | null;
+  token: string | null;
 };
 
 export default function ChipWarmup2Page() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
 
+  // Connect dialog
   const [open, setOpen] = useState(false);
   const [provider, setProvider] = useState<'evolution' | 'uazapi' | 'waha'>('evolution');
-  const [evoSelected, setEvoSelected] = useState<string>('');
+  const [evoSource, setEvoSource] = useState<'device' | 'server'>('device');
+  const [selectedDeviceId, setSelectedDeviceId] = useState('');
+  const [selectedServerId, setSelectedServerId] = useState('');
+  const [remoteInstances, setRemoteInstances] = useState<RemoteInstance[]>([]);
+  const [loadingRemote, setLoadingRemote] = useState(false);
+  const [selectedRemote, setSelectedRemote] = useState<Set<string>>(new Set());
+
   const [apiUrl, setApiUrl] = useState('');
   const [instanceName, setInstanceName] = useState('');
   const [token, setToken] = useState('');
 
-  // Manage Warmup Evolutions
+  // Servers manager
   const [manageOpen, setManageOpen] = useState(false);
-  const [addEvoOpen, setAddEvoOpen] = useState(false);
-  const [evoLabel, setEvoLabel] = useState('');
-  const [evoUrl, setEvoUrl] = useState('');
-  const [evoInstance, setEvoInstance] = useState('');
-  const [evoKey, setEvoKey] = useState('');
+  const [addServerOpen, setAddServerOpen] = useState(false);
+  const [srvLabel, setSrvLabel] = useState('');
+  const [srvUrl, setSrvUrl] = useState('');
+  const [srvKey, setSrvKey] = useState('');
 
   const { data: warmups = [], isLoading } = useQuery({
     queryKey: ['chip-warmups-v2'],
@@ -95,39 +102,86 @@ export default function ChipWarmup2Page() {
     },
   });
 
-  const { data: warmupEvos = [] } = useQuery({
-    queryKey: ['warmup-evolution-instances'],
+  const { data: servers = [] } = useQuery({
+    queryKey: ['warmup-evolution-servers'],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from('warmup_evolution_instances')
-        .select('id, label, evolution_api_url, instance_name, evolution_api_key')
+        .from('warmup_evolution_servers')
+        .select('id, label, evolution_api_url, evolution_api_key')
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return (data ?? []) as WarmupEvo[];
+      return (data ?? []) as WarmupServer[];
     },
   });
 
-  const connectMutation = useMutation({
-    mutationFn: async () => {
-      const payload: Record<string, unknown> = { action: 'connect' };
-      if (provider === 'evolution') {
-        if (!evoSelected) throw new Error('Selecione uma Evolution');
-        const { kind, id } = decEvo(evoSelected);
-        if (kind === 'device') payload.device_id = id;
-        else payload.warmup_instance_id = id;
-      } else {
-        payload.provider = provider;
-        payload.url = apiUrl;
-        payload.instancia = instanceName;
-        payload.token = token;
-      }
-      const { data, error } = await supabase.functions.invoke('chip-warmup-v2', { body: payload });
+  const fetchRemoteInstances = async (serverId: string) => {
+    if (!serverId) return;
+    setLoadingRemote(true);
+    setRemoteInstances([]);
+    setSelectedRemote(new Set());
+    try {
+      const { data, error } = await supabase.functions.invoke('warmup-evolution-list', {
+        body: { server_id: serverId },
+      });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      return data;
+      setRemoteInstances(((data as any)?.instances ?? []) as RemoteInstance[]);
+    } catch (err) {
+      toast.error('Erro ao listar instâncias', { description: (err as Error).message });
+    } finally {
+      setLoadingRemote(false);
+    }
+  };
+
+  const connectMutation = useMutation({
+    mutationFn: async () => {
+      if (provider === 'evolution') {
+        if (evoSource === 'device') {
+          if (!selectedDeviceId) throw new Error('Selecione um dispositivo');
+          const { data, error } = await supabase.functions.invoke('chip-warmup-v2', {
+            body: { action: 'connect', device_id: selectedDeviceId },
+          });
+          if (error) throw error;
+          if ((data as any)?.error) throw new Error((data as any).error);
+          return 1;
+        }
+        // server: connect each selected remote instance
+        const server = servers.find((s) => s.id === selectedServerId);
+        if (!server) throw new Error('Selecione um servidor Evolution');
+        if (selectedRemote.size === 0) throw new Error('Selecione ao menos uma instância');
+        let ok = 0;
+        const errors: string[] = [];
+        for (const name of selectedRemote) {
+          const inst = remoteInstances.find((i) => i.name === name);
+          const tokenForInst = inst?.token || server.evolution_api_key;
+          const { data, error } = await supabase.functions.invoke('chip-warmup-v2', {
+            body: {
+              action: 'connect',
+              provider: 'evolution',
+              url: server.evolution_api_url,
+              instancia: name,
+              token: tokenForInst,
+            },
+          });
+          if (error || (data as any)?.error) {
+            errors.push(`${name}: ${error?.message ?? (data as any)?.error}`);
+          } else ok++;
+        }
+        if (errors.length) throw new Error(`${ok} conectados. Falhas:\n${errors.join('\n')}`);
+        return ok;
+      }
+      const { data, error } = await supabase.functions.invoke('chip-warmup-v2', {
+        body: {
+          action: 'connect',
+          provider, url: apiUrl, instancia: instanceName, token,
+        },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return 1;
     },
-    onSuccess: () => {
-      toast.success('Chip conectado no Maturador 2!');
+    onSuccess: (count) => {
+      toast.success(`${count} chip(s) conectado(s) no Maturador 2!`);
       queryClient.invalidateQueries({ queryKey: ['chip-warmups-v2'] });
       setOpen(false);
       resetForm();
@@ -167,52 +221,65 @@ export default function ChipWarmup2Page() {
     onError: (err: Error) => toast.error('Erro ao remover', { description: err.message }),
   });
 
-  const addEvoMutation = useMutation({
+  const addServerMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error('Sessão expirada');
-      const { error } = await (supabase as any).from('warmup_evolution_instances').insert({
+      const { error } = await (supabase as any).from('warmup_evolution_servers').insert({
         user_id: user.id,
-        label: evoLabel.trim(),
-        evolution_api_url: evoUrl.trim(),
-        instance_name: evoInstance.trim(),
-        evolution_api_key: evoKey.trim(),
+        label: srvLabel.trim(),
+        evolution_api_url: srvUrl.trim().replace(/\/+$/, ''),
+        evolution_api_key: srvKey.trim(),
       });
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('Evolução de aquecimento cadastrada!');
-      queryClient.invalidateQueries({ queryKey: ['warmup-evolution-instances'] });
-      setAddEvoOpen(false);
-      setEvoLabel(''); setEvoUrl(''); setEvoInstance(''); setEvoKey('');
+      toast.success('Servidor Evolution cadastrado!');
+      queryClient.invalidateQueries({ queryKey: ['warmup-evolution-servers'] });
+      setAddServerOpen(false);
+      setSrvLabel(''); setSrvUrl(''); setSrvKey('');
     },
     onError: (err: Error) => toast.error('Erro ao cadastrar', { description: err.message }),
   });
 
-  const deleteEvoMutation = useMutation({
+  const deleteServerMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any).from('warmup_evolution_instances').delete().eq('id', id);
+      const { error } = await (supabase as any).from('warmup_evolution_servers').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('Evolução removida');
-      queryClient.invalidateQueries({ queryKey: ['warmup-evolution-instances'] });
+      toast.success('Servidor removido');
+      queryClient.invalidateQueries({ queryKey: ['warmup-evolution-servers'] });
     },
     onError: (err: Error) => toast.error('Erro ao remover', { description: err.message }),
   });
 
   const resetForm = () => {
     setProvider('evolution');
-    setEvoSelected('');
-    setApiUrl('');
-    setInstanceName('');
-    setToken('');
+    setEvoSource('device');
+    setSelectedDeviceId('');
+    setSelectedServerId('');
+    setRemoteInstances([]);
+    setSelectedRemote(new Set());
+    setApiUrl(''); setInstanceName(''); setToken('');
   };
 
+  const toggleRemote = (name: string) => {
+    setSelectedRemote((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+  };
+
+  const alreadyConnectedNames = new Set(
+    warmups.filter((w) => w.status === 'connected').map((w) => w.instance_name),
+  );
+
   const canSubmit = provider === 'evolution'
-    ? !!evoSelected
+    ? (evoSource === 'device' ? !!selectedDeviceId : selectedRemote.size > 0)
     : !!apiUrl && !!instanceName && !!token;
 
-  const canAddEvo = !!evoLabel.trim() && !!evoUrl.trim() && !!evoInstance.trim() && !!evoKey.trim();
+  const canAddServer = !!srvLabel.trim() && !!srvUrl.trim() && !!srvKey.trim();
 
   return (
     <div className="space-y-6">
@@ -223,21 +290,21 @@ export default function ChipWarmup2Page() {
             Aquecimento 2
           </h1>
           <p className="text-muted-foreground mt-1">
-            Maturador Raul — Evolution nativo (seus dispositivos ou Evoluções extras de aquecimento)
+            Maturador Raul — escolha seus dispositivos ou conecte um servidor Evolution e selecione da lista
           </p>
         </div>
 
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setManageOpen(true)}>
             <Server className="h-4 w-4 mr-2" />
-            Evoluções de Aquecimento
+            Servidores Evolution
           </Button>
 
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
             <DialogTrigger asChild>
               <Button><Plus className="h-4 w-4 mr-2" />Conectar Chip</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-xl">
               <DialogHeader>
                 <DialogTitle>Conectar Chip — Maturador 2</DialogTitle>
               </DialogHeader>
@@ -255,49 +322,146 @@ export default function ChipWarmup2Page() {
                 </div>
 
                 {provider === 'evolution' ? (
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-1">
-                      <Smartphone className="h-3 w-3" /> Instância Evolution
-                    </Label>
-                    <Select value={evoSelected} onValueChange={setEvoSelected}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma instância" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {devices.length === 0 && warmupEvos.length === 0 ? (
-                          <div className="px-2 py-3 text-sm text-muted-foreground">
-                            Nenhuma instância disponível
+                  <>
+                    <div className="space-y-2">
+                      <Label>Origem</Label>
+                      <Select value={evoSource} onValueChange={(v) => setEvoSource(v as any)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="device">Meus Dispositivos (Agentes)</SelectItem>
+                          <SelectItem value="server">Servidor Evolution (lista de instâncias)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {evoSource === 'device' ? (
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-1">
+                          <Smartphone className="h-3 w-3" /> Dispositivo
+                        </Label>
+                        <Select value={selectedDeviceId} onValueChange={setSelectedDeviceId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione um dispositivo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {devices.length === 0 ? (
+                              <div className="px-2 py-3 text-sm text-muted-foreground">
+                                Nenhum dispositivo cadastrado
+                              </div>
+                            ) : devices.map((d) => (
+                              <SelectItem key={d.id} value={d.id}>
+                                {d.name} — {d.instance_name} {d.status === 'connected' ? '🟢' : '⚪'}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="space-y-2">
+                          <Label className="flex items-center gap-1">
+                            <Server className="h-3 w-3" /> Servidor Evolution
+                          </Label>
+                          <div className="flex gap-2">
+                            <Select
+                              value={selectedServerId}
+                              onValueChange={(v) => { setSelectedServerId(v); fetchRemoteInstances(v); }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={servers.length ? 'Selecione um servidor' : 'Nenhum servidor cadastrado'} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {servers.map((s) => (
+                                  <SelectItem key={s.id} value={s.id}>
+                                    {s.label} — {s.evolution_api_url}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              variant="outline" size="icon" title="Recarregar lista"
+                              disabled={!selectedServerId || loadingRemote}
+                              onClick={() => fetchRemoteInstances(selectedServerId)}
+                            >
+                              {loadingRemote ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                            </Button>
                           </div>
-                        ) : (
-                          <>
-                            {devices.length > 0 && (
-                              <SelectGroup>
-                                <SelectLabel>Meus Dispositivos</SelectLabel>
-                                {devices.map((d) => (
-                                  <SelectItem key={d.id} value={encEvo('device', d.id)}>
-                                    {d.name} — {d.instance_name} {d.status === 'connected' ? '🟢' : '⚪'}
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
+                          {servers.length === 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              Cadastre um servidor em "Servidores Evolution" (URL + API key global).
+                            </p>
+                          )}
+                        </div>
+
+                        {selectedServerId && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Label>Instâncias disponíveis</Label>
+                              {remoteInstances.length > 0 && (
+                                <button
+                                  type="button"
+                                  className="text-xs text-primary hover:underline"
+                                  onClick={() => {
+                                    const selectable = remoteInstances
+                                      .filter((i) => !alreadyConnectedNames.has(i.name))
+                                      .map((i) => i.name);
+                                    setSelectedRemote(
+                                      selectedRemote.size === selectable.length ? new Set() : new Set(selectable),
+                                    );
+                                  }}
+                                >
+                                  {selectedRemote.size === remoteInstances.filter((i) => !alreadyConnectedNames.has(i.name)).length
+                                    ? 'Desmarcar todos' : 'Selecionar todos'}
+                                </button>
+                              )}
+                            </div>
+                            <div className="border rounded-md max-h-64 overflow-y-auto divide-y">
+                              {loadingRemote ? (
+                                <div className="flex justify-center py-6">
+                                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                                </div>
+                              ) : remoteInstances.length === 0 ? (
+                                <div className="text-center text-sm text-muted-foreground py-6">
+                                  Nenhuma instância encontrada neste servidor.
+                                </div>
+                              ) : remoteInstances.map((inst) => {
+                                const already = alreadyConnectedNames.has(inst.name);
+                                return (
+                                  <label
+                                    key={inst.name}
+                                    className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/40 ${already ? 'opacity-60' : ''}`}
+                                  >
+                                    <Checkbox
+                                      checked={selectedRemote.has(inst.name)}
+                                      disabled={already}
+                                      onCheckedChange={() => toggleRemote(inst.name)}
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-sm font-medium truncate">{inst.name}</div>
+                                      <div className="text-xs text-muted-foreground truncate">
+                                        {inst.profileName ? `${inst.profileName} · ` : ''}
+                                        {inst.number ?? 'sem número'}
+                                      </div>
+                                    </div>
+                                    {already ? (
+                                      <Badge variant="secondary" className="text-xs">já no maturador</Badge>
+                                    ) : inst.status ? (
+                                      <Badge variant="outline" className="text-xs capitalize">{inst.status}</Badge>
+                                    ) : null}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            {selectedRemote.size > 0 && (
+                              <p className="text-xs text-muted-foreground">
+                                {selectedRemote.size} instância(s) selecionada(s)
+                              </p>
                             )}
-                            {warmupEvos.length > 0 && (
-                              <SelectGroup>
-                                <SelectLabel>Evoluções de Aquecimento</SelectLabel>
-                                {warmupEvos.map((e) => (
-                                  <SelectItem key={e.id} value={encEvo('warmup', e.id)}>
-                                    {e.label} — {e.instance_name}
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            )}
-                          </>
+                          </div>
                         )}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Cadastre Evoluções extras em "Evoluções de Aquecimento" — elas ficam isoladas dos seus agentes.
-                    </p>
-                  </div>
+                      </>
+                    )}
+                  </>
                 ) : (
                   <>
                     <div className="space-y-2">
@@ -319,7 +483,7 @@ export default function ChipWarmup2Page() {
                 <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
                 <Button onClick={() => connectMutation.mutate()} disabled={!canSubmit || connectMutation.isPending}>
                   {connectMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Conectar
+                  Conectar{provider === 'evolution' && evoSource === 'server' && selectedRemote.size > 1 ? ` (${selectedRemote.size})` : ''}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -327,38 +491,36 @@ export default function ChipWarmup2Page() {
         </div>
       </div>
 
-      {/* Manage Warmup Evolutions */}
+      {/* Manage Servers */}
       <Dialog open={manageOpen} onOpenChange={setManageOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Server className="h-5 w-5" /> Evoluções de Aquecimento
+              <Server className="h-5 w-5" /> Servidores Evolution
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <p className="text-sm text-muted-foreground">
-              Cadastre instâncias Evolution exclusivas do Aquecimento 2. Elas <b>não aparecem em Dispositivos</b> e não podem ser vinculadas a agentes.
+              Cadastre 1 ou mais servidores Evolution (URL + API key global). Depois, ao conectar chip, basta escolher o servidor — a lista de instâncias é puxada automaticamente. <b>Não afeta Dispositivos nem agentes.</b>
             </p>
 
             <div className="flex justify-end">
-              <Button size="sm" onClick={() => setAddEvoOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" /> Adicionar Evolução
+              <Button size="sm" onClick={() => setAddServerOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" /> Adicionar Servidor
               </Button>
             </div>
 
-            {warmupEvos.length === 0 ? (
+            {servers.length === 0 ? (
               <div className="border rounded-md p-6 text-center text-muted-foreground text-sm">
-                Nenhuma Evolução cadastrada para aquecimento.
+                Nenhum servidor cadastrado.
               </div>
             ) : (
               <div className="border rounded-md divide-y">
-                {warmupEvos.map((e) => (
-                  <div key={e.id} className="flex items-center justify-between p-3">
+                {servers.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between p-3">
                     <div className="min-w-0">
-                      <div className="font-medium">{e.label}</div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {e.evolution_api_url} · {e.instance_name}
-                      </div>
+                      <div className="font-medium">{s.label}</div>
+                      <div className="text-xs text-muted-foreground truncate">{s.evolution_api_url}</div>
                     </div>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
@@ -368,16 +530,16 @@ export default function ChipWarmup2Page() {
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Remover "{e.label}"?</AlertDialogTitle>
+                          <AlertDialogTitle>Remover "{s.label}"?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            A instância sai da lista de aquecimento. Chips já enviados ao maturador continuam ativos até serem desconectados.
+                            O servidor sai da lista. Chips já enviados ao maturador continuam ativos até serem desconectados.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancelar</AlertDialogCancel>
                           <AlertDialogAction
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            onClick={() => deleteEvoMutation.mutate(e.id)}>
+                            onClick={() => deleteServerMutation.mutate(s.id)}>
                             Remover
                           </AlertDialogAction>
                         </AlertDialogFooter>
@@ -391,34 +553,33 @@ export default function ChipWarmup2Page() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Warmup Evolution */}
-      <Dialog open={addEvoOpen} onOpenChange={setAddEvoOpen}>
+      {/* Add Server */}
+      <Dialog open={addServerOpen} onOpenChange={setAddServerOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Nova Evolução de Aquecimento</DialogTitle>
+            <DialogTitle>Novo Servidor Evolution</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Apelido *</Label>
-              <Input placeholder="Ex: Evolution Secundária" value={evoLabel} onChange={(e) => setEvoLabel(e.target.value)} />
+              <Input placeholder="Ex: Evolution Aquecimento" value={srvLabel} onChange={(e) => setSrvLabel(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>URL da Evolution *</Label>
-              <Input placeholder="https://sua-evolution.com" value={evoUrl} onChange={(e) => setEvoUrl(e.target.value)} />
+              <Input placeholder="https://sua-evolution.com" value={srvUrl} onChange={(e) => setSrvUrl(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>Nome da Instância *</Label>
-              <Input placeholder="instancia-warmup-01" value={evoInstance} onChange={(e) => setEvoInstance(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>API Key *</Label>
-              <Input placeholder="API key da Evolution" value={evoKey} onChange={(e) => setEvoKey(e.target.value)} />
+              <Label>API Key Global *</Label>
+              <Input placeholder="API key global do servidor" value={srvKey} onChange={(e) => setSrvKey(e.target.value)} />
+              <p className="text-xs text-muted-foreground">
+                Usada para listar todas as instâncias do servidor.
+              </p>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddEvoOpen(false)}>Cancelar</Button>
-            <Button onClick={() => addEvoMutation.mutate()} disabled={!canAddEvo || addEvoMutation.isPending}>
-              {addEvoMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            <Button variant="outline" onClick={() => setAddServerOpen(false)}>Cancelar</Button>
+            <Button onClick={() => addServerMutation.mutate()} disabled={!canAddServer || addServerMutation.isPending}>
+              {addServerMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Salvar
             </Button>
           </DialogFooter>
