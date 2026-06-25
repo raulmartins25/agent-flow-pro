@@ -150,6 +150,7 @@ export default function ChipWarmup2Page() {
         if (!server) throw new Error('Selecione um servidor Evolution');
         if (selectedRemote.size === 0) throw new Error('Selecione ao menos uma instância');
         let ok = 0;
+        let already = 0;
         const errors: string[] = [];
         for (const name of selectedRemote) {
           const inst = remoteInstances.find((i) => i.name === name);
@@ -163,11 +164,20 @@ export default function ChipWarmup2Page() {
               token: tokenForInst,
             },
           });
-          if (error || (data as any)?.error) {
-            errors.push(`${name}: ${error?.message ?? (data as any)?.error}`);
-          } else ok++;
+          const errMsg = error?.message ?? (data as any)?.error;
+          const apiResp = JSON.stringify((data as any)?.api_response ?? '').toLowerCase();
+          const isAlready =
+            (data as any)?.already_connected ||
+            apiResp.includes('ja esta conectada') ||
+            apiResp.includes('já está conectada');
+          if (isAlready) { already++; ok++; }
+          else if (errMsg) errors.push(`${name}: ${errMsg}`);
+          else ok++;
         }
-        if (errors.length) throw new Error(`${ok} conectados. Falhas:\n${errors.join('\n')}`);
+        if (errors.length) {
+          const msg = `${ok} conectado(s)${already ? ` (${already} já estava(m))` : ''}. Falhas: ${errors.join(' | ')}`;
+          throw new Error(msg);
+        }
         return ok;
       }
       const { data, error } = await supabase.functions.invoke('chip-warmup-v2', {

@@ -100,22 +100,39 @@ Deno.serve(async (req) => {
       let apiData: unknown;
       try { apiData = JSON.parse(apiText); } catch { apiData = { raw: apiText }; }
 
-      if (!apiRes.ok) {
+      // Idempotente: se o maturador disser "já está conectada", tratamos como sucesso
+      const flat = JSON.stringify(apiData ?? {}).toLowerCase();
+      const alreadyConnected =
+        flat.includes("ja esta conectada") ||
+        flat.includes("já está conectada") ||
+        flat.includes("ja está conectada");
+
+      if (!apiRes.ok && !alreadyConnected) {
         return new Response(JSON.stringify({ error: "Falha no maturador", api_response: apiData }), {
           status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      await supabase.from("chip_warmups").insert({
-        user_id: user.id,
-        provider,
-        api_url: url,
-        instance_name: instancia,
-        token,
-        status: "connected",
-      });
+      // upsert para não duplicar quando o chip já estava na lista
+      const { data: existing } = await supabase
+        .from("chip_warmups")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("api_url", url)
+        .eq("instance_name", instancia)
+        .maybeSingle();
 
-      return new Response(JSON.stringify({ success: true, api_response: apiData }), {
+      if (existing) {
+        await supabase.from("chip_warmups")
+          .update({ status: "connected", provider, token })
+          .eq("id", existing.id);
+      } else {
+        await supabase.from("chip_warmups").insert({
+          user_id: user.id, provider, api_url: url, instance_name: instancia, token, status: "connected",
+        });
+      }
+
+      return new Response(JSON.stringify({ success: true, already_connected: alreadyConnected, api_response: apiData }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
