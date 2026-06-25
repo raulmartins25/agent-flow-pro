@@ -39,30 +39,49 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { action, device_id } = body;
+    const { action, device_id, warmup_instance_id } = body;
     let { provider, url, instancia, token } = body;
 
-    // Native Evolution: resolve from device_id
-    if (device_id) {
+    // Native Evolution: resolve from device_id OR warmup_instance_id
+    if (device_id || warmup_instance_id) {
       const admin = createClient(
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
       );
-      const { data: device } = await admin
-        .from("devices")
-        .select("*")
-        .eq("id", device_id)
-        .eq("user_id", user.id)
-        .single();
-      if (!device) {
-        return new Response(JSON.stringify({ error: "Dispositivo não encontrado" }), {
-          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+
+      if (device_id) {
+        const { data: device } = await admin
+          .from("devices")
+          .select("*")
+          .eq("id", device_id)
+          .eq("user_id", user.id)
+          .single();
+        if (!device) {
+          return new Response(JSON.stringify({ error: "Dispositivo não encontrado" }), {
+            status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        provider = "evolution";
+        url = device.evolution_api_url;
+        instancia = device.instance_name;
+        token = device.evolution_api_key;
+      } else {
+        const { data: inst } = await admin
+          .from("warmup_evolution_instances")
+          .select("*")
+          .eq("id", warmup_instance_id)
+          .eq("user_id", user.id)
+          .single();
+        if (!inst) {
+          return new Response(JSON.stringify({ error: "Instância de aquecimento não encontrada" }), {
+            status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        provider = "evolution";
+        url = inst.evolution_api_url;
+        instancia = inst.instance_name;
+        token = inst.evolution_api_key;
       }
-      provider = "evolution";
-      url = device.evolution_api_url;
-      instancia = device.instance_name;
-      token = device.evolution_api_key;
     }
 
     if (action === "connect") {

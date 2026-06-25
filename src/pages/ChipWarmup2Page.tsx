@@ -5,15 +5,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  SelectGroup, SelectLabel,
+} from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Flame, Plus, Power, PowerOff, Loader2, Smartphone, Trash2 } from 'lucide-react';
+import { Flame, Plus, Power, PowerOff, Loader2, Smartphone, Trash2, Server } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { useAuthStore } from '@/stores/authStore';
 
 type ChipWarmup = {
   id: string;
@@ -35,22 +39,45 @@ type Device = {
   status: string;
 };
 
+type WarmupEvo = {
+  id: string;
+  label: string;
+  evolution_api_url: string;
+  instance_name: string;
+  evolution_api_key: string;
+};
+
+// Encodes source into the select value: "device:<id>" or "warmup:<id>"
+const encEvo = (kind: 'device' | 'warmup', id: string) => `${kind}:${id}`;
+const decEvo = (v: string) => {
+  const [kind, ...rest] = v.split(':');
+  return { kind: kind as 'device' | 'warmup', id: rest.join(':') };
+};
+
 export default function ChipWarmup2Page() {
   const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
+
   const [open, setOpen] = useState(false);
   const [provider, setProvider] = useState<'evolution' | 'uazapi' | 'waha'>('evolution');
-  const [deviceId, setDeviceId] = useState<string>('');
+  const [evoSelected, setEvoSelected] = useState<string>('');
   const [apiUrl, setApiUrl] = useState('');
   const [instanceName, setInstanceName] = useState('');
   const [token, setToken] = useState('');
+
+  // Manage Warmup Evolutions
+  const [manageOpen, setManageOpen] = useState(false);
+  const [addEvoOpen, setAddEvoOpen] = useState(false);
+  const [evoLabel, setEvoLabel] = useState('');
+  const [evoUrl, setEvoUrl] = useState('');
+  const [evoInstance, setEvoInstance] = useState('');
+  const [evoKey, setEvoKey] = useState('');
 
   const { data: warmups = [], isLoading } = useQuery({
     queryKey: ['chip-warmups-v2'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('chip_warmups')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .from('chip_warmups').select('*').order('created_at', { ascending: false });
       if (error) throw error;
       return data as ChipWarmup[];
     },
@@ -68,12 +95,26 @@ export default function ChipWarmup2Page() {
     },
   });
 
+  const { data: warmupEvos = [] } = useQuery({
+    queryKey: ['warmup-evolution-instances'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('warmup_evolution_instances')
+        .select('id, label, evolution_api_url, instance_name, evolution_api_key')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as WarmupEvo[];
+    },
+  });
+
   const connectMutation = useMutation({
     mutationFn: async () => {
       const payload: Record<string, unknown> = { action: 'connect' };
       if (provider === 'evolution') {
-        if (!deviceId) throw new Error('Selecione um dispositivo Evolution');
-        payload.device_id = deviceId;
+        if (!evoSelected) throw new Error('Selecione uma Evolution');
+        const { kind, id } = decEvo(evoSelected);
+        if (kind === 'device') payload.device_id = id;
+        else payload.warmup_instance_id = id;
       } else {
         payload.provider = provider;
         payload.url = apiUrl;
@@ -126,104 +167,263 @@ export default function ChipWarmup2Page() {
     onError: (err: Error) => toast.error('Erro ao remover', { description: err.message }),
   });
 
+  const addEvoMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error('Sessão expirada');
+      const { error } = await (supabase as any).from('warmup_evolution_instances').insert({
+        user_id: user.id,
+        label: evoLabel.trim(),
+        evolution_api_url: evoUrl.trim(),
+        instance_name: evoInstance.trim(),
+        evolution_api_key: evoKey.trim(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Evolução de aquecimento cadastrada!');
+      queryClient.invalidateQueries({ queryKey: ['warmup-evolution-instances'] });
+      setAddEvoOpen(false);
+      setEvoLabel(''); setEvoUrl(''); setEvoInstance(''); setEvoKey('');
+    },
+    onError: (err: Error) => toast.error('Erro ao cadastrar', { description: err.message }),
+  });
+
+  const deleteEvoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).from('warmup_evolution_instances').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Evolução removida');
+      queryClient.invalidateQueries({ queryKey: ['warmup-evolution-instances'] });
+    },
+    onError: (err: Error) => toast.error('Erro ao remover', { description: err.message }),
+  });
+
   const resetForm = () => {
     setProvider('evolution');
-    setDeviceId('');
+    setEvoSelected('');
     setApiUrl('');
     setInstanceName('');
     setToken('');
   };
 
   const canSubmit = provider === 'evolution'
-    ? !!deviceId
+    ? !!evoSelected
     : !!apiUrl && !!instanceName && !!token;
+
+  const canAddEvo = !!evoLabel.trim() && !!evoUrl.trim() && !!evoInstance.trim() && !!evoKey.trim();
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Flame className="h-6 w-6 text-orange-500" />
             Aquecimento 2
           </h1>
           <p className="text-muted-foreground mt-1">
-            Maturador Raul — conecte diretamente seu Evolution sem preencher nada
+            Maturador Raul — Evolution nativo (seus dispositivos ou Evoluções extras de aquecimento)
           </p>
         </div>
 
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" />Conectar Chip</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Conectar Chip — Maturador 2</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Provedor</Label>
-                <Select value={provider} onValueChange={(v) => setProvider(v as any)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="evolution">Evolution (nativo)</SelectItem>
-                    <SelectItem value="uazapi">Uazapi</SelectItem>
-                    <SelectItem value="waha">WAHA</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setManageOpen(true)}>
+            <Server className="h-4 w-4 mr-2" />
+            Evoluções de Aquecimento
+          </Button>
 
-              {provider === 'evolution' ? (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button><Plus className="h-4 w-4 mr-2" />Conectar Chip</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Conectar Chip — Maturador 2</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label className="flex items-center gap-1">
-                    <Smartphone className="h-3 w-3" /> Dispositivo Evolution
-                  </Label>
-                  <Select value={deviceId} onValueChange={setDeviceId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um dispositivo" />
-                    </SelectTrigger>
+                  <Label>Provedor</Label>
+                  <Select value={provider} onValueChange={(v) => setProvider(v as any)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {devices.length === 0 ? (
-                        <div className="px-2 py-3 text-sm text-muted-foreground">
-                          Nenhum dispositivo cadastrado
-                        </div>
-                      ) : devices.map((d) => (
-                        <SelectItem key={d.id} value={d.id}>
-                          {d.name} — {d.instance_name} {d.status === 'connected' ? '🟢' : '⚪'}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="evolution">Evolution (nativo)</SelectItem>
+                      <SelectItem value="uazapi">Uazapi</SelectItem>
+                      <SelectItem value="waha">WAHA</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
-                    URL, instância e API key serão usadas automaticamente do dispositivo.
-                  </p>
                 </div>
-              ) : (
-                <>
+
+                {provider === 'evolution' ? (
                   <div className="space-y-2">
-                    <Label>URL da API *</Label>
-                    <Input placeholder="https://sua-api.com" value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} />
+                    <Label className="flex items-center gap-1">
+                      <Smartphone className="h-3 w-3" /> Instância Evolution
+                    </Label>
+                    <Select value={evoSelected} onValueChange={setEvoSelected}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione uma instância" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {devices.length === 0 && warmupEvos.length === 0 ? (
+                          <div className="px-2 py-3 text-sm text-muted-foreground">
+                            Nenhuma instância disponível
+                          </div>
+                        ) : (
+                          <>
+                            {devices.length > 0 && (
+                              <SelectGroup>
+                                <SelectLabel>Meus Dispositivos</SelectLabel>
+                                {devices.map((d) => (
+                                  <SelectItem key={d.id} value={encEvo('device', d.id)}>
+                                    {d.name} — {d.instance_name} {d.status === 'connected' ? '🟢' : '⚪'}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            )}
+                            {warmupEvos.length > 0 && (
+                              <SelectGroup>
+                                <SelectLabel>Evoluções de Aquecimento</SelectLabel>
+                                {warmupEvos.map((e) => (
+                                  <SelectItem key={e.id} value={encEvo('warmup', e.id)}>
+                                    {e.label} — {e.instance_name}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            )}
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Cadastre Evoluções extras em "Evoluções de Aquecimento" — elas ficam isoladas dos seus agentes.
+                    </p>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Nome da Instância *</Label>
-                    <Input placeholder="minha-instancia" value={instanceName} onChange={(e) => setInstanceName(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Token *</Label>
-                    <Input placeholder="Token de autenticação" value={token} onChange={(e) => setToken(e.target.value)} />
-                  </div>
-                </>
-              )}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-              <Button onClick={() => connectMutation.mutate()} disabled={!canSubmit || connectMutation.isPending}>
-                {connectMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Conectar
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label>URL da API *</Label>
+                      <Input placeholder="https://sua-api.com" value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Nome da Instância *</Label>
+                      <Input placeholder="minha-instancia" value={instanceName} onChange={(e) => setInstanceName(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Token *</Label>
+                      <Input placeholder="Token de autenticação" value={token} onChange={(e) => setToken(e.target.value)} />
+                    </div>
+                  </>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+                <Button onClick={() => connectMutation.mutate()} disabled={!canSubmit || connectMutation.isPending}>
+                  {connectMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Conectar
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
+
+      {/* Manage Warmup Evolutions */}
+      <Dialog open={manageOpen} onOpenChange={setManageOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Server className="h-5 w-5" /> Evoluções de Aquecimento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              Cadastre instâncias Evolution exclusivas do Aquecimento 2. Elas <b>não aparecem em Dispositivos</b> e não podem ser vinculadas a agentes.
+            </p>
+
+            <div className="flex justify-end">
+              <Button size="sm" onClick={() => setAddEvoOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" /> Adicionar Evolução
+              </Button>
+            </div>
+
+            {warmupEvos.length === 0 ? (
+              <div className="border rounded-md p-6 text-center text-muted-foreground text-sm">
+                Nenhuma Evolução cadastrada para aquecimento.
+              </div>
+            ) : (
+              <div className="border rounded-md divide-y">
+                {warmupEvos.map((e) => (
+                  <div key={e.id} className="flex items-center justify-between p-3">
+                    <div className="min-w-0">
+                      <div className="font-medium">{e.label}</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {e.evolution_api_url} · {e.instance_name}
+                      </div>
+                    </div>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="sm" className="text-destructive">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Remover "{e.label}"?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            A instância sai da lista de aquecimento. Chips já enviados ao maturador continuam ativos até serem desconectados.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={() => deleteEvoMutation.mutate(e.id)}>
+                            Remover
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Warmup Evolution */}
+      <Dialog open={addEvoOpen} onOpenChange={setAddEvoOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nova Evolução de Aquecimento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Apelido *</Label>
+              <Input placeholder="Ex: Evolution Secundária" value={evoLabel} onChange={(e) => setEvoLabel(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>URL da Evolution *</Label>
+              <Input placeholder="https://sua-evolution.com" value={evoUrl} onChange={(e) => setEvoUrl(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Nome da Instância *</Label>
+              <Input placeholder="instancia-warmup-01" value={evoInstance} onChange={(e) => setEvoInstance(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>API Key *</Label>
+              <Input placeholder="API key da Evolution" value={evoKey} onChange={(e) => setEvoKey(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddEvoOpen(false)}>Cancelar</Button>
+            <Button onClick={() => addEvoMutation.mutate()} disabled={!canAddEvo || addEvoMutation.isPending}>
+              {addEvoMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>

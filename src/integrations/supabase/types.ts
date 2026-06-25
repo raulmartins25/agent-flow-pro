@@ -678,6 +678,39 @@ export type Database = {
         }
         Relationships: []
       }
+      warmup_evolution_instances: {
+        Row: {
+          created_at: string
+          evolution_api_key: string
+          evolution_api_url: string
+          id: string
+          instance_name: string
+          label: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          evolution_api_key: string
+          evolution_api_url: string
+          id?: string
+          instance_name: string
+          label: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          evolution_api_key?: string
+          evolution_api_url?: string
+          id?: string
+          instance_name?: string
+          label?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
