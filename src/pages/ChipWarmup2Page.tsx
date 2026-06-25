@@ -9,7 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Flame, Plus, Power, PowerOff, Loader2, Smartphone } from 'lucide-react';
+import { Flame, Plus, Power, PowerOff, Loader2, Smartphone, Trash2 } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 type ChipWarmup = {
   id: string;
@@ -103,6 +107,23 @@ export default function ChipWarmup2Page() {
       queryClient.invalidateQueries({ queryKey: ['chip-warmups-v2'] });
     },
     onError: (err: Error) => toast.error('Erro ao desconectar', { description: err.message }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (w: ChipWarmup) => {
+      if (w.status === 'connected' && w.api_url && w.instance_name) {
+        await supabase.functions.invoke('chip-warmup-v2', {
+          body: { action: 'disconnect', url: w.api_url, instancia: w.instance_name },
+        });
+      }
+      const { error } = await supabase.from('chip_warmups').delete().eq('id', w.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Chip removido!');
+      queryClient.invalidateQueries({ queryKey: ['chip-warmups-v2'] });
+    },
+    onError: (err: Error) => toast.error('Erro ao remover', { description: err.message }),
   });
 
   const resetForm = () => {
@@ -233,17 +254,42 @@ export default function ChipWarmup2Page() {
                 {w.instance_name && (
                   <div className="text-sm"><span className="text-muted-foreground">Instância:</span> {w.instance_name}</div>
                 )}
-                <div className="pt-2">
+                <div className="pt-2 flex gap-2">
                   {w.status === 'connected' ? (
-                    <Button variant="destructive" size="sm" className="w-full"
+                    <Button variant="destructive" size="sm" className="flex-1"
                       disabled={disconnectMutation.isPending}
                       onClick={() => disconnectMutation.mutate(w)}>
                       {disconnectMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                       Desconectar
                     </Button>
                   ) : (
-                    <Badge variant="outline">Desconectado</Badge>
+                    <Badge variant="outline" className="flex-1 justify-center">Desconectado</Badge>
                   )}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="sm" title="Remover">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Remover este chip?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {w.status === 'connected'
+                            ? 'O chip será desconectado do maturador e removido da lista.'
+                            : 'O registro será removido da lista.'}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          onClick={() => deleteMutation.mutate(w)}>
+                          Remover
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </CardContent>
             </Card>
