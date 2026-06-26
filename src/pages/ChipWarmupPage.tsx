@@ -35,7 +35,7 @@ export default function ChipWarmupPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('chip_warmups')
-        .select('id, user_id, provider, evolution_url, instance_name, phone_number, status, error_message, created_at, updated_at')
+        .select('id, user_id, provider, api_url, instance_name, status, created_at')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data as ChipWarmup[];
