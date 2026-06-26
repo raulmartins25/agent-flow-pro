@@ -17,7 +17,7 @@ type ChipWarmup = {
   provider: string;
   api_url: string;
   instance_name: string | null;
-  token: string | null;
+  
   status: string;
   created_at: string;
 };
@@ -35,7 +35,7 @@ export default function ChipWarmupPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('chip_warmups')
-        .select('*')
+        .select('id, user_id, provider, api_url, instance_name, status, created_at')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data as ChipWarmup[];
@@ -257,7 +257,7 @@ export default function ChipWarmupPage() {
                         setProvider(w.provider);
                         setApiUrl(w.api_url);
                         setInstanceName(w.instance_name || '');
-                        setToken(w.token || '');
+                        setToken('');
                         connectMutation.mutate();
                       }}
                     >

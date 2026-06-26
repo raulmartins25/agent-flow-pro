@@ -46,10 +46,19 @@ export default function AgentWizard() {
       try {
         const { data: agent, error: agentError } = await supabase
           .from('agents')
-          .select('*')
+          .select('id, user_id, name, type, status, device_id, transfer_number, transfer_trigger, llm_provider, llm_model, followup_start_message, followup_max, followup_interval_minutes, restrictions, custom_prompt_enabled')
           .eq('id', id)
           .single();
         if (agentError || !agent) throw agentError || new Error('Agente não encontrado');
+
+        // Load prompt_compiled separately via secure edge function (owner-only)
+        let promptCompiled = '';
+        try {
+          const { data: pdata } = await supabase.functions.invoke('get-agent-prompt', {
+            body: { agent_id: id },
+          });
+          promptCompiled = (pdata as any)?.prompt_compiled || '';
+        } catch {}
 
         const { data: config } = await supabase
           .from('agent_config')
@@ -71,7 +80,7 @@ export default function AgentWizard() {
           device_id: agent.device_id || '',
           llm_provider: agent.llm_provider,
           llm_model: agent.llm_model || '',
-          llm_api_key: agent.llm_api_key || '',
+          llm_api_key: '',
           transfer_number: agent.transfer_number || '',
           transfer_trigger: agent.transfer_trigger || 'after_all_questions',
           followup_enabled: (agent.followup_max ?? 3) > 0,
@@ -112,7 +121,7 @@ export default function AgentWizard() {
             '6': [{ open: '08:00', close: '12:00' }],
           },
           custom_prompt_enabled: (agent as any).custom_prompt_enabled ?? false,
-          custom_prompt: agent.prompt_compiled || '',
+          custom_prompt: promptCompiled,
         }, id);
       } catch (e: any) {
         toast.error(e.message || 'Erro ao carregar agente');

@@ -13,7 +13,7 @@ export default function Agents() {
   const [loading, setLoading] = useState(true);
 
   const fetchAgents = async () => {
-    const { data, error } = await supabase.from('agents').select('*, devices(name, phone_number)').order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('agents').select('id, name, type, status, device_id, created_at, devices(name, phone_number)').order('created_at', { ascending: false });
     if (error) console.error(error);
     setAgents(data ?? []);
     setLoading(false);
