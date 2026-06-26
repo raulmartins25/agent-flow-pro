@@ -17,7 +17,7 @@ type ChipWarmup = {
   provider: string;
   api_url: string;
   instance_name: string | null;
-  token: string | null;
+  
   status: string;
   created_at: string;
 };
