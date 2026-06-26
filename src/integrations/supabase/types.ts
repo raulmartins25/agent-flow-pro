@@ -746,13 +746,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_owner_agent_secrets: {
-        Args: { _agent_id: string }
-        Returns: {
-          llm_api_key: string
-          prompt_compiled: string
-        }[]
-      }
+      [_ in never]: never
     }
     Enums: {
       agent_status: "active" | "paused" | "inactive"
