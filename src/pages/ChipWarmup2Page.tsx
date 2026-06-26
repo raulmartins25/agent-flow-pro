@@ -34,8 +34,6 @@ type ChipWarmup = {
 type Device = {
   id: string;
   name: string;
-  evolution_api_url: string;
-  evolution_api_key: string;
   instance_name: string;
   status: string;
 };
