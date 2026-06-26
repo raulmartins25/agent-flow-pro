@@ -80,7 +80,7 @@ export default function AgentWizard() {
           device_id: agent.device_id || '',
           llm_provider: agent.llm_provider,
           llm_model: agent.llm_model || '',
-          llm_api_key: agent.llm_api_key || '',
+          llm_api_key: '',
           transfer_number: agent.transfer_number || '',
           transfer_trigger: agent.transfer_trigger || 'after_all_questions',
           followup_enabled: (agent.followup_max ?? 3) > 0,
