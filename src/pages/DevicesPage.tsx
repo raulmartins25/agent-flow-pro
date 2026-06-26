@@ -51,7 +51,7 @@ export default function DevicesPage() {
   const [checkingWebhook, setCheckingWebhook] = useState(false);
 
   const fetchDevices = async () => {
-    const { data } = await supabase.from('devices').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase.from('devices').select('id, user_id, name, instance_name, phone_number, status, qr_code, created_at, last_connected_at').order('created_at', { ascending: false });
     setDevices((data as Device[]) ?? []);
     setLoading(false);
   };
