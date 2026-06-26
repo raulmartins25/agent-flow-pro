@@ -46,10 +46,19 @@ export default function AgentWizard() {
       try {
         const { data: agent, error: agentError } = await supabase
           .from('agents')
-          .select('*')
+          .select('id, user_id, name, type, status, device_id, transfer_number, transfer_trigger, llm_provider, llm_model, followup_start_message, followup_max, followup_interval_minutes, restrictions, custom_prompt_enabled')
           .eq('id', id)
           .single();
         if (agentError || !agent) throw agentError || new Error('Agente não encontrado');
+
+        // Load prompt_compiled separately via secure edge function (owner-only)
+        let promptCompiled = '';
+        try {
+          const { data: pdata } = await supabase.functions.invoke('get-agent-prompt', {
+            body: { agent_id: id },
+          });
+          promptCompiled = (pdata as any)?.prompt_compiled || '';
+        } catch {}
 
         const { data: config } = await supabase
           .from('agent_config')
