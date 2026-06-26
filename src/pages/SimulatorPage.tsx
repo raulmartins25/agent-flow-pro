@@ -89,9 +89,6 @@ export default function SimulatorPage() {
         body: {
           messages: [...messages, userMsg],
           prompt: agent.prompt_compiled || compileAgentPrompt({ ...config, ...agent }),
-          llm_provider: agent.llm_provider,
-          llm_model: agent.llm_model,
-          llm_api_key: agent.llm_api_key,
           agent_id: id,
           simulation_mode: simulationMode,
         },
