@@ -59,16 +59,55 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, prompt, llm_provider, llm_model, llm_api_key, agent_id, simulation_mode } = await req.json();
+    const body = await req.json();
+    const { messages, agent_id, simulation_mode } = body;
     const mode: "real" | "dryrun" | "off" = simulation_mode === "real" ? "real" : simulation_mode === "dryrun" ? "dryrun" : "off";
 
-    // Detect Ecuro integration if agent_id provided and mode != off
+    if (!agent_id) {
+      return new Response(JSON.stringify({ error: "agent_id é obrigatório" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Authenticate caller and verify ownership of the agent
+    const authHeader = req.headers.get("Authorization") || "";
+    const jwt = authHeader.replace(/^Bearer\s+/i, "");
+    if (!jwt) {
+      return new Response(JSON.stringify({ error: "unauthenticated" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const { data: userData, error: userErr } = await supabase.auth.getUser(jwt);
+    if (userErr || !userData?.user) {
+      return new Response(JSON.stringify({ error: "invalid token" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Load full agent (with secrets) and verify owner
+    const { data: agentRow } = await supabase
+      .from("agents")
+      .select("id, user_id, prompt_compiled, llm_provider, llm_model, llm_api_key")
+      .eq("id", agent_id)
+      .maybeSingle();
+    if (!agentRow || agentRow.user_id !== userData.user.id) {
+      return new Response(JSON.stringify({ error: "agent not found" }), {
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const prompt: string = agentRow.prompt_compiled || body.prompt || "";
+    const llm_provider: string = agentRow.llm_provider || "claude";
+    const llm_model: string | null = agentRow.llm_model;
+    const llm_api_key: string | null = agentRow.llm_api_key;
+
+    // Detect Ecuro integration
     let ecuroEnabled = false;
-    if (agent_id && mode !== "off") {
-      const supabase = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      );
+    if (mode !== "off") {
       const { data: integ } = await supabase
         .from("agent_integrations")
         .select("enabled")
