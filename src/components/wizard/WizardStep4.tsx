@@ -145,7 +145,10 @@ export function WizardStep4() {
   const handleUpload = async (questionId: string, file: File) => {
     const fileType = getFileType(file);
     const safeName = sanitizeFileName(file.name);
-    const path = `${questionId}/${safeName}`;
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id;
+    if (!userId) { toast.error('Sessão expirada'); return; }
+    const path = `${userId}/${questionId}/${safeName}`;
 
     setUploading((prev) => ({ ...prev, [questionId]: 0 }));
 
