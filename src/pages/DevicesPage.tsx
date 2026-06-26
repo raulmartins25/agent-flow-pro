@@ -105,7 +105,7 @@ export default function DevicesPage() {
       evolution_api_url: form.evolution_api_url,
       evolution_api_key: form.evolution_api_key,
       instance_name: form.instance_name,
-    }).select().single();
+    }).select('id, user_id, name, instance_name, phone_number, status, qr_code, created_at, last_connected_at').single();
 
     if (error) { toast.error(error.message); setSaving(false); return; }
     toast.success('Dispositivo adicionado!');
