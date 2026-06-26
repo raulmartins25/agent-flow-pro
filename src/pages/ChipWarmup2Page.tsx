@@ -95,7 +95,7 @@ export default function ChipWarmup2Page() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('devices')
-        .select('id, name, evolution_api_url, evolution_api_key, instance_name, status')
+        .select('id, name, instance_name, status')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data as Device[];
