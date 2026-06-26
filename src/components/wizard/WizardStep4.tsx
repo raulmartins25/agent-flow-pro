@@ -188,7 +188,11 @@ export function WizardStep4() {
   const handleRemoveMedia = async (questionId: string) => {
     const q = questions.find((q) => q.id === questionId);
     if (q?.media?.file_name) {
-      await supabase.storage.from('agent-media').remove([`${questionId}/${q.media.file_name}`]);
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id;
+      if (userId) {
+        await supabase.storage.from('agent-media').remove([`${userId}/${questionId}/${q.media.file_name}`]);
+      }
     }
     updateMedia(questionId, undefined);
   };
