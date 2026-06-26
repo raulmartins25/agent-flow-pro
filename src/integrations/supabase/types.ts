@@ -746,16 +746,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
-        Returns: boolean
-      }
-      user_can_access_device: {
-        Args: { _device: string; _user: string }
-        Returns: boolean
+      get_owner_agent_secrets: {
+        Args: { _agent_id: string }
+        Returns: {
+          llm_api_key: string
+          prompt_compiled: string
+        }[]
       }
     }
     Enums: {
