@@ -257,7 +257,7 @@ export default function ChipWarmupPage() {
                         setProvider(w.provider);
                         setApiUrl(w.api_url);
                         setInstanceName(w.instance_name || '');
-                        setToken(w.token || '');
+                        setToken('');
                         connectMutation.mutate();
                       }}
                     >
