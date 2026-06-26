@@ -34,9 +34,23 @@ export default function SimulatorPage() {
   useEffect(() => {
     if (!id) return;
     const fetch = async () => {
-      const { data: ag } = await supabase.from('agents').select('*').eq('id', id).single();
+      const { data: ag } = await supabase
+        .from('agents')
+        .select('id, user_id, name, type, status, device_id, llm_provider, llm_model, custom_prompt_enabled')
+        .eq('id', id)
+        .single();
       const { data: cfg } = await supabase.from('agent_config').select('*').eq('agent_id', id).single();
-      setAgent(ag);
+
+      // Load prompt_compiled separately via secure edge function (owner-only)
+      let promptCompiled: string | null = null;
+      try {
+        const { data: pdata } = await supabase.functions.invoke('get-agent-prompt', {
+          body: { agent_id: id },
+        });
+        promptCompiled = (pdata as any)?.prompt_compiled ?? null;
+      } catch {}
+
+      setAgent(ag ? { ...ag, prompt_compiled: promptCompiled } : ag);
       setConfig(cfg);
 
       // Send initial message
