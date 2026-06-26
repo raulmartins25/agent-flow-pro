@@ -19,8 +19,6 @@ import { toast } from 'sonner';
 type Device = {
   id: string;
   name: string;
-  evolution_api_url: string;
-  evolution_api_key: string;
   instance_name: string;
   phone_number: string | null;
   status: string;
