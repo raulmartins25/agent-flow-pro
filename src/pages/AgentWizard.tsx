@@ -121,7 +121,7 @@ export default function AgentWizard() {
             '6': [{ open: '08:00', close: '12:00' }],
           },
           custom_prompt_enabled: (agent as any).custom_prompt_enabled ?? false,
-          custom_prompt: agent.prompt_compiled || '',
+          custom_prompt: promptCompiled,
         }, id);
       } catch (e: any) {
         toast.error(e.message || 'Erro ao carregar agente');
