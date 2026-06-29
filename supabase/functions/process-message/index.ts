@@ -457,6 +457,14 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
           if (r.ok && result?.success) scheduleSucceeded = true;
           return result;
         }
+        if (name === "find_nearest_unit") {
+          const r = await fetch(`${supaUrl}/functions/v1/find-nearest-unit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query: args?.query || "" }),
+          });
+          return await r.json();
+        }
         return { error: "unknown tool" };
       } catch (e) {
         return { error: String(e) };
