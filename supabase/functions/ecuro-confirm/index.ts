@@ -31,6 +31,20 @@ Deno.serve(async (req) => {
         status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Skip se o agendamento local já está inativo
+    if (['cancelled', 'completed', 'no_show'].includes(String(appt.status))) {
+      if (conversation_id) {
+        await supabase.from('messages').insert({
+          conversation_id, role: 'system',
+          content: `[Ecuro] SKIP_confirm: status=${appt.status}, id=${appt.id}`,
+        });
+      }
+      return new Response(JSON.stringify({ ok: true, skipped: true, reason: 'appointment_inactive' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (!appt.external_id) {
       return new Response(JSON.stringify({ ok: true, note: 'no external_id, nothing to confirm on Ecuro' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -53,6 +67,20 @@ Deno.serve(async (req) => {
 
     const cfg = integ.config as { clinic_id: string; environment?: 'dev' | 'prod' };
     const env = cfg.environment === 'prod' ? 'prod' : 'dev';
+
+    // Skip se o ambiente em que o agendamento foi criado é diferente do atual
+    if (appt.ecuro_environment && appt.ecuro_environment !== env) {
+      if (conversation_id) {
+        await supabase.from('messages').insert({
+          conversation_id, role: 'system',
+          content: `[Ecuro] SKIP_confirm: env_mismatch (criado=${appt.ecuro_environment}, atual=${env}), id=${appt.id}`,
+        });
+      }
+      return new Response(JSON.stringify({ ok: true, skipped: true, reason: 'env_mismatch' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
 
     const payload = {
       id: appt.external_id,

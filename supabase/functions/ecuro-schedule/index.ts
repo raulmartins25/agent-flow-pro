@@ -55,6 +55,22 @@ Deno.serve(async (req) => {
     const start = new Date(start_time);
     const end = end_time ? new Date(end_time) : new Date(start.getTime() + duration * 60000);
 
+    // GUARD 0 — bloquear horários no passado (ou com menos de 5 min de antecedência)
+    const nowMs = Date.now();
+    const minStartMs = nowMs + 5 * 60 * 1000;
+    if (isNaN(start.getTime()) || start.getTime() <= minStartMs) {
+      const msg = 'Horário já passou ou está muito próximo do agora. Chame get_availability novamente e ofereça apenas horários futuros (mínimo 5 minutos de antecedência).';
+      if (conversation_id) {
+        await supabase.from('messages').insert({
+          conversation_id, role: 'system',
+          content: `[Ecuro] BLOQUEADO_horario_passado: tentativa de agendar ${start.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (agora=${new Date(nowMs).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}).`,
+        });
+      }
+      return new Response(JSON.stringify({ success: false, error: 'start_in_past', message: msg }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // GUARD 1 — respect clinic business hours (server-side trava contra alucinações do LLM)
     if (!isWithinBusinessHours(start.toISOString(), businessHours)) {
       const msg = 'Horário fora do expediente da clínica. Consulte a disponibilidade novamente e ofereça apenas horários retornados pela ferramenta get_availability.';
@@ -170,12 +186,40 @@ Deno.serve(async (req) => {
           convContactName = convRow?.contact_name || null;
         }
         const cfgAny = cfg as any;
-        const appt = (data && typeof data === 'object')
-          ? (data.data?.appointment || data.appointment || data.data || data)
-          : null;
-        const externalId = appt
-          ? (appt.id || appt.appointmentId || appt.appointment_id || appt._id || null)
-          : null;
+
+        // Extração robusta do external_id — varre vários caminhos comuns retornados pela Ecuro
+        const BAD_IDS = new Set(['', 'null', 'undefined', '[object object]']);
+        const pickId = (o: any): string | null => {
+          if (!o || typeof o !== 'object') return null;
+          const keys = ['id', 'appointmentId', 'appointment_id', '_id', 'external_id', 'uuid', 'appointmentUuid'];
+          for (const k of keys) {
+            const v = o[k];
+            if (v == null) continue;
+            const s = String(v).trim();
+            if (s && !BAD_IDS.has(s.toLowerCase())) return s;
+          }
+          return null;
+        };
+        let externalId: string | null = null;
+        if (data && typeof data === 'object') {
+          const candidates = [
+            data.data?.appointment, data.appointment,
+            data.data, data,
+          ];
+          for (const c of candidates) {
+            externalId = pickId(c);
+            if (externalId) break;
+          }
+        }
+
+        if (!externalId && conversation_id) {
+          const truncated = (typeof data === 'string' ? data : JSON.stringify(data)).slice(0, 500);
+          await supabase.from('messages').insert({
+            conversation_id, role: 'system',
+            content: `[Ecuro] AVISO_external_id_ausente: payload=${truncated}`,
+          });
+        }
+
         await supabase.from('appointments').insert({
           user_id: agentRow?.user_id,
           agent_id,
@@ -187,7 +231,8 @@ Deno.serve(async (req) => {
           end_time: end.toISOString(),
           clinic_name: cfgAny.clinic_name || null,
           specialty_name: cfgAny.specialty_name || null,
-          external_id: externalId ? String(externalId) : null,
+          external_id: externalId,
+          ecuro_environment: env,
         });
       } catch (insErr) {
         console.error('appointments insert failed', insErr);
