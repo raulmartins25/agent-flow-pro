@@ -1,0 +1,4 @@
+UPDATE public.agents
+SET prompt_compiled = prompt_compiled || E'\n\nLOCAL DA CLÍNICA (use SEMPRE estes dados exatos quando o paciente pedir endereço, localização ou link da SUA unidade — NUNCA invente, encurte ou modifique):\n- Nome: Sorria Goiás Parque Anhanguera\n- Endereço: Av. Pasteur, n° 122 - Parque Anhanguera II, Goiânia - GO, 74340-570\n- Link do mapa: https://maps.app.goo.gl/HxSAatEcKFZbV2E48\nNÃO use goo.gl encurtado diferente, bit.ly ou qualquer outro encurtador. Envie o link exatamente como acima.'
+WHERE id='9d01e0ff-9bf3-4fe5-8979-cd10e692ec6e'
+  AND position('maps.app.goo.gl/HxSAatEcKFZbV2E48' in prompt_compiled) = 0;

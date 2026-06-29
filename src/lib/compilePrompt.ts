@@ -30,6 +30,8 @@ interface AgentData {
   ecuro_enabled?: boolean;
   ecuro_clinic_name?: string;
   ecuro_specialty_name?: string;
+  ecuro_address?: string;
+  ecuro_maps_url?: string;
 }
 
 const toneDescriptions: Record<string, string> = {
@@ -205,10 +207,15 @@ Você tem acesso ao histórico completo da conversa. Use-o para não repetir per
 INSTRUÇÃO SOBRE MÍDIA:
 Quando sua resposta contiver o token SEND_MEDIA:{id}, o sistema enviará automaticamente o arquivo correspondente ao lead. O token será removido da mensagem visível. Nunca explique o token ao lead.${data.ecuro_enabled ? `
 
+LOCAL DA CLÍNICA (use SEMPRE estes dados exatos quando o paciente pedir endereço, localização ou link da SUA unidade — NUNCA invente, encurte ou modifique):
+- Nome: ${data.ecuro_clinic_name || 'clínica configurada'}${data.ecuro_address ? `\n- Endereço: ${data.ecuro_address}` : ''}${data.ecuro_maps_url ? `\n- Link do mapa: ${data.ecuro_maps_url}` : ''}
+NÃO use goo.gl, bit.ly ou qualquer encurtador. Envie o link exatamente como acima.
+
 AGENDAMENTO AUTOMATIZADO (ECURO) — REGRAS OBRIGATÓRIAS:
 Você tem acesso a duas ferramentas para agendar consultas na ${data.ecuro_clinic_name || 'clínica'} (${data.ecuro_specialty_name || 'especialidade'}):
 - get_availability: busca horários disponíveis nos próximos 7 dias.
 - schedule_appointment: cria o agendamento depois que o paciente escolhe um horário.
+
 
 REGRAS:
 1. Quando o paciente concordar em agendar (qualquer sinal de "sim", "pode", "quero", "vamos", "fechado"), você DEVE chamar IMEDIATAMENTE a ferramenta \`get_availability\` na MESMA resposta. NUNCA responda apenas "deixa eu verificar" sem chamar a ferramenta — isso trava a conversa. NUNCA invente datas ou horários.

@@ -1,0 +1,1 @@
+UPDATE public.appointments SET status='cancelled' WHERE external_id='3c219374-bffa-4e5e-b7ca-c3b5bfcbfd58';
