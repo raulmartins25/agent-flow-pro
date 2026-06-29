@@ -164,6 +164,14 @@ serve(async (req) => {
           });
           return await r.json();
         }
+        if (name === "find_nearest_unit") {
+          const r = await fetch(`${supaUrl}/functions/v1/find-nearest-unit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+            body: JSON.stringify({ query: args?.query || "" }),
+          });
+          return await r.json();
+        }
         return { error: "unknown tool" };
       } catch (e) {
         return { error: String(e) };
