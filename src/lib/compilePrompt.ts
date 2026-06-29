@@ -30,6 +30,8 @@ interface AgentData {
   ecuro_enabled?: boolean;
   ecuro_clinic_name?: string;
   ecuro_specialty_name?: string;
+  ecuro_address?: string;
+  ecuro_maps_url?: string;
 }
 
 const toneDescriptions: Record<string, string> = {
