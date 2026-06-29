@@ -202,6 +202,7 @@ export type Database = {
           conversation_id: string | null
           created_at: string
           device_id: string | null
+          ecuro_environment: string | null
           end_time: string | null
           external_id: string | null
           id: string
@@ -225,6 +226,7 @@ export type Database = {
           conversation_id?: string | null
           created_at?: string
           device_id?: string | null
+          ecuro_environment?: string | null
           end_time?: string | null
           external_id?: string | null
           id?: string
@@ -248,6 +250,7 @@ export type Database = {
           conversation_id?: string | null
           created_at?: string
           device_id?: string | null
+          ecuro_environment?: string | null
           end_time?: string | null
           external_id?: string | null
           id?: string
