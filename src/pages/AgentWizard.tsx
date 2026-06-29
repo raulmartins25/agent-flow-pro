@@ -111,6 +111,8 @@ export default function AgentWizard() {
           ecuro_specialty_id: ecuroCfg.specialty_id || '',
           ecuro_specialty_name: ecuroCfg.specialty_name || '',
           ecuro_default_duration: ecuroCfg.default_duration || 30,
+          ecuro_address: ecuroCfg.address || '',
+          ecuro_maps_url: ecuroCfg.maps_url || '',
           ecuro_business_hours: ecuroCfg.business_hours || {
             '0': null,
             '1': [{ open: '08:00', close: '18:00' }],
@@ -185,6 +187,8 @@ export default function AgentWizard() {
             specialty_id: wizardData.ecuro_specialty_id,
             specialty_name: wizardData.ecuro_specialty_name,
             default_duration: wizardData.ecuro_default_duration,
+            address: wizardData.ecuro_address || undefined,
+            maps_url: wizardData.ecuro_maps_url || undefined,
             business_hours: wizardData.ecuro_business_hours,
           },
         }, { onConflict: 'agent_id,provider' });
