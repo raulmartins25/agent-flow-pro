@@ -55,6 +55,22 @@ Deno.serve(async (req) => {
     const start = new Date(start_time);
     const end = end_time ? new Date(end_time) : new Date(start.getTime() + duration * 60000);
 
+    // GUARD 0 — bloquear horários no passado (ou com menos de 5 min de antecedência)
+    const nowMs = Date.now();
+    const minStartMs = nowMs + 5 * 60 * 1000;
+    if (isNaN(start.getTime()) || start.getTime() <= minStartMs) {
+      const msg = 'Horário já passou ou está muito próximo do agora. Chame get_availability novamente e ofereça apenas horários futuros (mínimo 5 minutos de antecedência).';
+      if (conversation_id) {
+        await supabase.from('messages').insert({
+          conversation_id, role: 'system',
+          content: `[Ecuro] BLOQUEADO_horario_passado: tentativa de agendar ${start.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (agora=${new Date(nowMs).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}).`,
+        });
+      }
+      return new Response(JSON.stringify({ success: false, error: 'start_in_past', message: msg }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // GUARD 1 — respect clinic business hours (server-side trava contra alucinações do LLM)
     if (!isWithinBusinessHours(start.toISOString(), businessHours)) {
       const msg = 'Horário fora do expediente da clínica. Consulte a disponibilidade novamente e ofereça apenas horários retornados pela ferramenta get_availability.';
