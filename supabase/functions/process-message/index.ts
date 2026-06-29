@@ -414,6 +414,20 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
           },
         },
       },
+      {
+        type: "function",
+        function: {
+          name: "find_nearest_unit",
+          description: "Buscar a unidade da rede mais próxima a partir de um bairro, cidade ou nome de unidade mencionado pelo paciente. Use SEMPRE que o paciente perguntar sobre outras unidades, localização, se tem unidade em algum bairro/cidade, ou disser onde mora. NUNCA invente unidades, telefones ou links de Maps — use só o que esta ferramenta retornar.",
+          parameters: {
+            type: "object",
+            required: ["query"],
+            properties: {
+              query: { type: "string", description: "Bairro, cidade ou nome da unidade mencionado pelo paciente (ex.: 'Trindade', 'Aparecida de Goiânia', 'Anápolis')" },
+            },
+          },
+        },
+      },
     ] : undefined;
 
     async function runEcuroTool(name: string, args: any) {
