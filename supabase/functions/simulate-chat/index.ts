@@ -53,6 +53,20 @@ const ECURO_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "find_nearest_unit",
+      description: "Buscar a unidade da rede mais próxima a partir de um bairro, cidade ou nome de unidade mencionado pelo paciente. Use SEMPRE que o paciente perguntar sobre outras unidades, localização, se tem unidade em algum bairro/cidade, ou disser onde mora. NUNCA invente unidades, telefones ou links de Maps — use só o que esta ferramenta retornar.",
+      parameters: {
+        type: "object",
+        required: ["query"],
+        properties: {
+          query: { type: "string", description: "Bairro, cidade ou nome da unidade mencionado pelo paciente" },
+        },
+      },
+    },
+  },
 ];
 
 serve(async (req) => {
@@ -147,6 +161,14 @@ serve(async (req) => {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
             body: JSON.stringify({ agent_id, patient_phone: args.patient_phone || "5500000000000", ...args }),
+          });
+          return await r.json();
+        }
+        if (name === "find_nearest_unit") {
+          const r = await fetch(`${supaUrl}/functions/v1/find-nearest-unit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+            body: JSON.stringify({ query: args?.query || "" }),
           });
           return await r.json();
         }
