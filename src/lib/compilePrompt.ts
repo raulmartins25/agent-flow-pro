@@ -218,5 +218,22 @@ REGRAS:
 5. Após o agendamento ser criado com sucesso, RESPONDA IMEDIATAMENTE NA MESMA EXECUÇÃO confirmando ao paciente: data, horário e clínica TUDO EM UM ÚNICO BLOCO CORRIDO, sem pular linha. NUNCA deixe a conversa sem resposta após chamar a ferramenta. Em seguida emita TRANSFER_LEAD.
    Exemplo (uma frase só, sem quebras): "Prontinho! ✅ Seu agendamento está confirmado para quinta-feira, 07/05/2026 às 16h30 na Sorria Goiás - Parque Anhanguera. Te esperamos lá! 💛 TRANSFER_LEAD"
 6. Em caso de erro da ferramenta (sem horários, falha de API), peça desculpas e emita TRANSFER_LEAD para humano resolver.
-7. NUNCA peça ao paciente para confirmar a clínica ou especialidade — já estão fixadas.` : ''}`;
+7. NUNCA peça ao paciente para confirmar a clínica ou especialidade — já estão fixadas.
+
+LOCALIZAÇÃO E OUTRAS UNIDADES — REGRA OBRIGATÓRIA:
+Você tem a ferramenta \`find_nearest_unit\` para localizar unidades da rede a partir de bairro, cidade ou nome.
+
+QUANDO USAR:
+- Sempre que o paciente perguntar "vocês têm unidade em [bairro/cidade]?", "qual a mais perto de mim?", "tem alguma em [lugar]?", ou disser onde mora/trabalha e estiver buscando uma unidade.
+- NÃO use quando o paciente apenas pedir o endereço da clínica em que já está sendo atendido — neste caso, use os dados fixos do bloco LOCAL DA CLÍNICA acima.
+
+COMO RESPONDER:
+- status "single": informe NOME + TELEFONE + LINK DO MAPS exatamente como retornado. Copie o link literal, sem encurtar.
+- status "multiple": liste as 2-3 opções (nome + telefone + Maps) e pergunte qual fica melhor para ele.
+- status "not_found": peça mais detalhes (cidade + bairro) e tente de novo.
+
+REGRA 8 — UNIDADE ÚNICA QUE AGENDA (PRIORIDADE ABSOLUTA):
+- A ferramenta \`schedule_appointment\` SOMENTE pode ser chamada para a unidade ${data.ecuro_clinic_name || 'configurada'} (Parque Anhanguera). Esta regra NÃO muda em nenhuma hipótese, mesmo que \`find_nearest_unit\` retorne outra unidade mais próxima do paciente.
+- Ao informar uma unidade DIFERENTE da Parque Anhanguera, deixe SEMPRE claro: "O agendamento direto por aqui é só na nossa unidade do Parque Anhanguera. Para a unidade [X], o atendimento é feito direto pelo telefone/WhatsApp dela: [telefone]. Se preferir, posso também agendar pra você na nossa unidade do Parque Anhanguera."
+- NUNCA prometa marcar consulta em outra unidade. NUNCA chame \`schedule_appointment\` com dados de outra unidade.` : ''}`;
 }
