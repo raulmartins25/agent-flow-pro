@@ -414,6 +414,20 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
           },
         },
       },
+      {
+        type: "function",
+        function: {
+          name: "find_nearest_unit",
+          description: "Buscar a unidade da rede mais próxima a partir de um bairro, cidade ou nome de unidade mencionado pelo paciente. Use SEMPRE que o paciente perguntar sobre outras unidades, localização, se tem unidade em algum bairro/cidade, ou disser onde mora. NUNCA invente unidades, telefones ou links de Maps — use só o que esta ferramenta retornar.",
+          parameters: {
+            type: "object",
+            required: ["query"],
+            properties: {
+              query: { type: "string", description: "Bairro, cidade ou nome da unidade mencionado pelo paciente (ex.: 'Trindade', 'Aparecida de Goiânia', 'Anápolis')" },
+            },
+          },
+        },
+      },
     ] : undefined;
 
     async function runEcuroTool(name: string, args: any) {
@@ -442,6 +456,14 @@ Não comece com "Que ótimo!" ou "Perfeito!" — seja mais natural e específico
           lastScheduleResult = { ok: r.ok, result, args };
           if (r.ok && result?.success) scheduleSucceeded = true;
           return result;
+        }
+        if (name === "find_nearest_unit") {
+          const r = await fetch(`${supaUrl}/functions/v1/find-nearest-unit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query: args?.query || "" }),
+          });
+          return await r.json();
         }
         return { error: "unknown tool" };
       } catch (e) {

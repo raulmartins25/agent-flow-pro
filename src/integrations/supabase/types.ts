@@ -455,6 +455,51 @@ export type Database = {
         }
         Relationships: []
       }
+      clinic_units: {
+        Row: {
+          brand: string | null
+          city: string | null
+          created_at: string
+          id: string
+          maps_link: string | null
+          name: string
+          neighborhoods: string[]
+          notes: string | null
+          phone: string | null
+          schedules_via_ecuro: boolean
+          state: string | null
+          updated_at: string
+        }
+        Insert: {
+          brand?: string | null
+          city?: string | null
+          created_at?: string
+          id?: string
+          maps_link?: string | null
+          name: string
+          neighborhoods?: string[]
+          notes?: string | null
+          phone?: string | null
+          schedules_via_ecuro?: boolean
+          state?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brand?: string | null
+          city?: string | null
+          created_at?: string
+          id?: string
+          maps_link?: string | null
+          name?: string
+          neighborhoods?: string[]
+          notes?: string | null
+          phone?: string | null
+          schedules_via_ecuro?: boolean
+          state?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           agent_id: string
