@@ -755,7 +755,12 @@ export type Database = {
       agent_status: "active" | "paused" | "inactive"
       agent_type: "receptive" | "prospecting"
       app_role: "admin" | "moderator" | "user" | "client"
-      appointment_status: "scheduled" | "confirmed" | "cancelled" | "completed"
+      appointment_status:
+        | "scheduled"
+        | "confirmed"
+        | "cancelled"
+        | "completed"
+        | "pending_external_id"
       campaign_status: "pending" | "running" | "paused" | "completed" | "error"
       contact_status: "pending" | "sent" | "error" | "replied"
       conversation_status: "active" | "paused" | "transferred" | "closed"
@@ -897,7 +902,13 @@ export const Constants = {
       agent_status: ["active", "paused", "inactive"],
       agent_type: ["receptive", "prospecting"],
       app_role: ["admin", "moderator", "user", "client"],
-      appointment_status: ["scheduled", "confirmed", "cancelled", "completed"],
+      appointment_status: [
+        "scheduled",
+        "confirmed",
+        "cancelled",
+        "completed",
+        "pending_external_id",
+      ],
       campaign_status: ["pending", "running", "paused", "completed", "error"],
       contact_status: ["pending", "sent", "error", "replied"],
       conversation_status: ["active", "paused", "transferred", "closed"],

@@ -233,6 +233,7 @@ Deno.serve(async (req) => {
           specialty_name: cfgAny.specialty_name || null,
           external_id: externalId,
           ecuro_environment: env,
+          status: externalId ? 'scheduled' : 'pending_external_id',
         });
       } catch (insErr) {
         console.error('appointments insert failed', insErr);
