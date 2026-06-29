@@ -31,6 +31,20 @@ Deno.serve(async (req) => {
         status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Skip se o agendamento local já está inativo
+    if (['cancelled', 'completed', 'no_show'].includes(String(appt.status))) {
+      if (conversation_id) {
+        await supabase.from('messages').insert({
+          conversation_id, role: 'system',
+          content: `[Ecuro] SKIP_confirm: status=${appt.status}, id=${appt.id}`,
+        });
+      }
+      return new Response(JSON.stringify({ ok: true, skipped: true, reason: 'appointment_inactive' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (!appt.external_id) {
       return new Response(JSON.stringify({ ok: true, note: 'no external_id, nothing to confirm on Ecuro' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
