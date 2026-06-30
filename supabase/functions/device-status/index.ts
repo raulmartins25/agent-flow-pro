@@ -68,40 +68,64 @@ serve(async (req) => {
 
     let baseUrl = device.evolution_api_url.replace(/\/+$/, "");
     if (!/^https?:\/\//i.test(baseUrl)) baseUrl = `https://${baseUrl}`;
-    const res = await fetch(
-      `${baseUrl}/instance/connectionState/${device.instance_name}`,
-      { headers: { apikey: device.evolution_api_key } }
-    );
 
-    if (!res.ok) {
+    // --- Primary check: connectionState ---
+    let state: string | null = null;
+    try {
+      const res = await fetch(
+        `${baseUrl}/instance/connectionState/${encodeURIComponent(device.instance_name)}`,
+        { headers: { apikey: device.evolution_api_key } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        state = data?.instance?.state ?? null;
+      }
+    } catch (e) {
+      console.error("connectionState fetch failed:", e);
+    }
+
+    // --- Fallback/cross-check: fetchInstances (authoritative on Evolution v2) ---
+    let phoneNumber = device.phone_number;
+    let instanceFound = false;
+    try {
+      const infoRes = await fetch(
+        `${baseUrl}/instance/fetchInstances`,
+        { headers: { apikey: device.evolution_api_key } }
+      );
+      if (infoRes.ok) {
+        const instances = await infoRes.json();
+        if (Array.isArray(instances)) {
+          const inst = instances.find((i: any) => {
+            const nameV2 = i?.name;
+            const nameV1 = i?.instance?.instanceName;
+            return nameV1 === device.instance_name || nameV2 === device.instance_name;
+          });
+          if (inst) {
+            instanceFound = true;
+            // v2 shape: { name, connectionStatus, ownerJid }
+            // v1 shape: { instance: { instanceName, state, owner } }
+            const v2Status = inst?.connectionStatus;
+            const v1State = inst?.instance?.state;
+            const fetched = v2Status || v1State;
+            if (fetched === "open" && state !== "open") state = "open";
+            const owner = inst?.ownerJid || inst?.instance?.owner;
+            if (owner) phoneNumber = String(owner).replace("@s.whatsapp.net", "");
+          }
+        }
+      }
+    } catch (e) {
+      console.error("fetchInstances failed:", e);
+    }
+
+    if (!instanceFound && state === null) {
       await supabase.from("devices").update({ status: "error" }).eq("id", device_id);
       return new Response(JSON.stringify({ status: "error" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const data = await res.json();
-    const state = data?.instance?.state;
-
     if (state === "open") {
       await setWebhook(baseUrl, device.evolution_api_key, device.instance_name);
-
-      let phoneNumber = device.phone_number;
-      try {
-        const infoRes = await fetch(
-          `${baseUrl}/instance/fetchInstances`,
-          { headers: { apikey: device.evolution_api_key } }
-        );
-        if (infoRes.ok) {
-          const instances = await infoRes.json();
-          const inst = Array.isArray(instances)
-            ? instances.find((i: any) => i.instance?.instanceName === device.instance_name)
-            : null;
-          if (inst?.instance?.owner) {
-            phoneNumber = inst.instance.owner.replace("@s.whatsapp.net", "");
-          }
-        }
-      } catch {}
 
       await supabase.from("devices").update({
         status: "connected",
@@ -121,6 +145,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ status: "disconnected" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
   } catch (error) {
     console.error("Device status error:", error);
     return new Response(JSON.stringify({ error: (error as Error).message }), {
