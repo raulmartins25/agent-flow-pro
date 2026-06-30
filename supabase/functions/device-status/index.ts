@@ -92,30 +92,37 @@ serve(async (req) => {
         `${baseUrl}/instance/fetchInstances`,
         { headers: { apikey: device.evolution_api_key } }
       );
+      console.log("fetchInstances http:", infoRes.status);
       if (infoRes.ok) {
         const instances = await infoRes.json();
+        console.log("fetchInstances count:", Array.isArray(instances) ? instances.length : "not-array");
         if (Array.isArray(instances)) {
           const inst = instances.find((i: any) => {
             const nameV2 = i?.name;
             const nameV1 = i?.instance?.instanceName;
             return nameV1 === device.instance_name || nameV2 === device.instance_name;
           });
+          console.log("inst match:", !!inst, "looking for:", device.instance_name);
           if (inst) {
             instanceFound = true;
-            // v2 shape: { name, connectionStatus, ownerJid }
-            // v1 shape: { instance: { instanceName, state, owner } }
             const v2Status = inst?.connectionStatus;
             const v1State = inst?.instance?.state;
             const fetched = v2Status || v1State;
-            if (fetched === "open" && state !== "open") state = "open";
+            console.log("fetched state:", fetched, "v2:", v2Status, "v1:", v1State);
+            if (fetched === "open") state = "open";
             const owner = inst?.ownerJid || inst?.instance?.owner;
             if (owner) phoneNumber = String(owner).replace("@s.whatsapp.net", "");
           }
         }
+      } else {
+        const t = await infoRes.text();
+        console.error("fetchInstances non-ok:", infoRes.status, t.substring(0, 200));
       }
     } catch (e) {
       console.error("fetchInstances failed:", e);
     }
+    console.log("FINAL state:", state, "instanceFound:", instanceFound);
+
 
     if (!instanceFound && state === null) {
       await supabase.from("devices").update({ status: "error" }).eq("id", device_id);
