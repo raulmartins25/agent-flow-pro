@@ -73,7 +73,8 @@ export default function InboxPage() {
     const { data } = await supabase
       .from('conversations')
       .select('*, agents!inner(name, user_id), devices(name)')
-      .order('last_message_at', { ascending: false });
+      .order('last_message_at', { ascending: false, nullsFirst: false });
+
     const convs = (data as any[]) ?? [];
     setConversations(convs);
 
