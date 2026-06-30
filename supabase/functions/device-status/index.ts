@@ -89,9 +89,10 @@ serve(async (req) => {
     let instanceFound = false;
     try {
       const infoRes = await fetch(
-        `${baseUrl}/instance/fetchInstances`,
+        `${baseUrl}/instance/fetchInstances?instanceName=${encodeURIComponent(device.instance_name)}`,
         { headers: { apikey: device.evolution_api_key } }
       );
+
       console.log("fetchInstances http:", infoRes.status);
       if (infoRes.ok) {
         const instances = await infoRes.json();
