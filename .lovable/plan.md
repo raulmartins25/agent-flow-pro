@@ -1,99 +1,40 @@
-## Escopo
+## Diagnóstico
 
-Implementar o **PROMPT 2** (Localização + Convênio para a Jordana). Prompts 1 e 3 já foram concluídos.
+Aqueles "contatos" no topo do Inbox (ex.: `46918642180299`, `45196007972918`, `192882786959389`, `211608911515836`) **não são clientes**. São JIDs internos do WhatsApp — provavelmente `@lid` (Linked Identifier, ID interno do device pareado), `@broadcast` ou `status@broadcast` — que o `evolution-webhook` recebeu, passou pelo `canonicalPhone()` (que cortou o sufixo `@lid`) e gravou como se fosse telefone.
 
-Nada do fluxo atual (agendamento Ecuro, objeções existentes, anti-ban, transferência, Regra 8 da única unidade que agenda) será tocado fora do estritamente necessário.
+Evidências no banco:
+- As 4 conversas têm `msg_count = 0` e `last_message_at = NULL`.
+- `contact_name == contact_number` (nunca teve `pushName`).
+- Padrão de 14-15 dígitos, incompatível com telefone BR (12-13 dígitos).
+- Por isso o chat aparece **em branco** quando você clica — literalmente não há mensagens.
+- Aparecem no topo porque o Inbox ordena por `last_message_at DESC` e o Postgres coloca `NULL` antes de qualquer data quando descendente — então essas conversas vazias ficam acima de todas as reais.
 
----
+Atualmente o `evolution-webhook` só filtra `@g.us` (grupos) e `fromMe`. Nada barra `@lid`, `@broadcast`, `@newsletter` ou `status@broadcast`.
 
-## 1) Banco — tabela `clinic_units`
+## Mudanças
 
-Migration criando:
+### 1. `supabase/functions/evolution-webhook/index.ts` — filtrar JIDs não-usuário
+Logo após o filtro de `@g.us`, adicionar guarda:
+- Ignorar e retornar `{ok:true}` se `rawJid` terminar com `@lid`, `@broadcast`, `@newsletter`, ou for igual a `status@broadcast`.
+- Como cinto-e-suspensório, depois do `canonicalPhone`, se o resultado não casar com `^\d{10,15}$` *e* não tiver `pushName` plausível, ignorar (loga e sai).
 
-```
-clinic_units (
-  id uuid pk,
-  brand text,
-  name text not null,
-  city text,
-  state text,
-  neighborhoods text[],
-  phone text,
-  maps_link text,
-  schedules_via_ecuro bool default false,
-  notes text,
-  created_at, updated_at
-)
-```
+Não mexer em mais nada da lógica do webhook (mensagens, mídias, conversas reais continuam idênticas).
 
-- GRANTs: `service_role` ALL + `authenticated` SELECT.
-- RLS ON; policy SELECT para `authenticated`.
-- Seed com **49 unidades** (confirmado na contagem). Parque Anhanguera com `schedules_via_ecuro = true`. Santo Hilário e Vila Nova com `phone`/`maps_link` vazios.
+### 2. Limpeza das 4 conversas órfãs existentes
+Migration única (DELETE escopado e seguro): apagar de `conversations` apenas as linhas onde `last_message_at IS NULL` **e** `msg_count = 0` **e** `contact_number ~ '^\d{14,}$'` (ou seja, 14+ dígitos puros). Hoje isso atinge exatamente: `45196007972918`, `46918642180299`, `67843320229922`, `211608911515836`, `192882786959389`. Mensagens não existem para elas, então não há cascata relevante.
 
----
+### 3. `src/pages/InboxPage.tsx` — ordenação estável
+No `fetchConvs`, trocar `.order('last_message_at', { ascending: false })` por `.order('last_message_at', { ascending: false, nullsFirst: false })`. Conversas sem mensagem caem para o fim da lista em vez de poluírem o topo. (Sem nenhuma outra mudança de UI/lógica.)
 
-## 2) Nova edge function `find-nearest-unit`
+## Fora de escopo
+- Não mexer em `process-message`, prompts da Jordana, Ecuro, find_nearest_unit, anti-ban, warmup, relatórios ou RLS.
+- Não alterar `canonicalPhone` (vários pontos do código dependem dele).
+- Não tocar no fluxo de mídia nem em conversas reais já existentes.
 
-`supabase/functions/find-nearest-unit/index.ts` (verify_jwt = false).
+## Validação
+1. Após deploy, conferir no Inbox que `maria Lima` (11:59) volta ao topo e nenhum ID de 14+ dígitos aparece.
+2. Rodar `SELECT count(*) FROM conversations WHERE contact_number ~ '^\d{14,}$'` → deve voltar 0.
+3. Acompanhar logs do `evolution-webhook` por algumas horas: deve aparecer linha "Non-user JID ignored: …@lid" quando o WhatsApp mandar esses eventos, e nenhuma conversa nova com nome numérico longo deve surgir.
 
-Input: `{ query: string }`.
-
-Algoritmo (normalização sem acento, lowercase):
-1. Match exato em qualquer item de `neighborhoods`.
-2. Match parcial em `neighborhoods` (contains).
-3. Match em `city` ou `name`.
-4. Saída:
-   - 1 → `{ status: "single", unit }`
-   - 2+ → `{ status: "multiple", units }` (até 3)
-   - 0 → `{ status: "not_found" }`
-
-Campos retornados: `name, brand, city, state, phone, maps_link, schedules_via_ecuro`.
-
----
-
-## 3) Registrar tool no `process-message`
-
-- Adicionar `find_nearest_unit` ao array `ecuroTools` (não afeta agentes sem Ecuro).
-- Branch novo em `runEcuroTool` fazendo fetch para `find-nearest-unit`.
-- Sem mudanças em `get_availability` / `schedule_appointment`.
-
----
-
-## 4) Atualizar `src/lib/compilePrompt.ts`
-
-Acréscimos dentro do bloco condicional `ecuro_enabled`:
-
-- Reforço da Regra 8: `schedule_appointment` SÓ pode ser chamado para Parque Anhanguera, independente do retorno de `find_nearest_unit`.
-- Instrução de localização:
-  - Lead menciona bairro/cidade/"tem unidade em X?" → chamar `find_nearest_unit`.
-  - Responder com nome + telefone + Maps; deixar claro que só a Parque Anhanguera agenda por aqui, as demais o paciente contacta direto.
-  - Tratamento dos 3 status (single / multiple / not_found).
-  - Não chamar quando já em fluxo de agendamento na Parque Anhanguera.
-
----
-
-## 5) Config da Jordana
-
-UPDATE em `agents` adicionando o handler "convênio" ao JSON `objection_handlers` com a resposta exata fornecida. Sem outras mudanças.
-
----
-
-## 6) Testes isolados
-
-1. `find-nearest-unit` via curl: "Trindade" → 2, "Parque Amazônia" → 2, "Garavelo" → 1, "Quirinópolis" → 1, "Marte" → not_found.
-2. Simulador Jordana:
-   - Endereço sem citar bairro → dados fixos do Parque Anhanguera (não regrediu).
-   - "Moro em Trindade" → IA chama tool, lista as 2 com telefone+Maps, reforça que só Parque Anhanguera agenda.
-   - "Aceitam meu plano?" → nova resposta do handler convênio.
-3. Agendamento normal Parque Anhanguera (Ecuro) → não regrediu.
-
-Reporto evidências e confirmo que agendamento/transferência/anti-ban continuam iguais.
-
----
-
-## Arquivos
-
-- Novos: migration + seed; `supabase/functions/find-nearest-unit/index.ts`.
-- Editados: `supabase/functions/process-message/index.ts`, `src/lib/compilePrompt.ts`, `supabase/config.toml`.
-- UPDATE em `agents` (objection_handlers da Jordana).
-- Não tocados: `_shared/ecuro.ts`, `ecuro-availability`, `ecuro-schedule`, `ecuro-cancel`, `ecuro-confirm`, wizard, inbox, relatórios.
+## Por que o chat ficou em branco
+Você clicou em `46918642180299` — essa conversa tem **0 mensagens** no banco (foi criada por um evento `@lid` espúrio, nunca recebeu texto). Não é bug de renderização; é só lixo. Com a limpeza + filtro acima, isso para de acontecer.
