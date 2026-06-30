@@ -150,9 +150,10 @@ serve(async (req) => {
     }
 
     await supabase.from("devices").update({ status: "disconnected" }).eq("id", device_id);
-    return new Response(JSON.stringify({ status: "disconnected" }), {
+    return new Response(JSON.stringify({ status: "disconnected", _debug: { connStateRaw: state, instanceFound, phoneNumber, baseUrl } }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
 
   } catch (error) {
     console.error("Device status error:", error);
