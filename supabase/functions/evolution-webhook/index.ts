@@ -77,6 +77,19 @@ serve(async (req) => {
       });
     }
 
+    // === 1b. NON-USER JID FILTER (lid, broadcast, newsletter, status) ===
+    if (
+      rawJid.endsWith("@lid") ||
+      rawJid.endsWith("@broadcast") ||
+      rawJid.endsWith("@newsletter") ||
+      rawJid === "status@broadcast"
+    ) {
+      console.log("Non-user JID ignored:", rawJid);
+      return new Response(JSON.stringify({ ok: true, message: "Non-user JID ignored" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // === 2. FROM_ME FILTER (prevent loop) ===
     if (fromMe) {
       console.log("Own message ignored (fromMe=true), msgId:", evolutionMessageId);
@@ -87,6 +100,15 @@ serve(async (req) => {
 
     // === 3. NORMALIZE (use canonicalPhone so BR numbers match blast-created conversations) ===
     const contactNumber = canonicalPhone(rawJid);
+
+    // === 3b. SANITY: must look like a phone number (10-15 digits) ===
+    if (!/^\d{10,15}$/.test(contactNumber)) {
+      console.log("Invalid contact number ignored:", rawJid, "->", contactNumber);
+      return new Response(JSON.stringify({ ok: true, message: "Invalid contact number" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const content = msg.message?.conversation ||
       msg.message?.extendedTextMessage?.text ||
       msg.message?.imageMessage?.caption || "";
